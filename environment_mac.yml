@@ -1,0 +1,24 @@
+name: biscuit
+channels:
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.8
+  - torchvision
+  - torchaudio
+  - scipy
+  - matplotlib
+  - seaborn
+  - tensorboard
+  - networkx
+  - pydot
+  - numpy
+  - pytorch
+  - pip
+  - pip:
+    - ai2thor
+    - causal_world
+    - pybullet
+    - pytorch-lightning
+    - imageio
+    - optuna
