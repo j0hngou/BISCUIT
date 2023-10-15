@@ -1,0 +1,19 @@
+{
+	// Use IntelliSense to learn about possible attributes.
+	// Hover to view descriptions of existing attributes.
+	// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Python: Current File",
+			"type": "python",
+			"request": "launch",
+			"program": "${file}",
+			"console": "integratedTerminal",
+			"cwd": "${fileDirname}",
+			"justMyCode": true,
+			// cli args: --data_dir data --autoencoder_checkpoint pretrained_models/AE_iTHOR/AE_40l_64hid.ckpt
+			"args": ["--data_dir", "/home/john/Sync/BISCUIT/data/ithor_subsampled", "--autoencoder_checkpoint", "/home/john/Sync/BISCUIT/pretrained_models/AE_iTHOR/AE_40l_64hid.ckpt"]
+		}
+	]
+}

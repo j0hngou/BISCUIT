@@ -6,7 +6,7 @@ import sys
 sys.path.append('../../')
 from models.shared.utils import kl_divergence, gaussian_log_prob
 from models.shared.modules import MultivarLinear, MultivarSequential, LinearScheduler, SinusoidalEncoding
-
+from models.shared.text_models import SentenceTransformer, TextMLP
 
 def create_interaction_prior(*args, extra_args=None, **kwargs):
     if extra_args is None:
@@ -29,6 +29,7 @@ class InteractionTransitionPrior(nn.Module):
                  temp_schedule=[(1.0, 0), (2.5, 50000), (5.0, 100000)],
                  add_prev_state=False,
                  img_width=32,
+                 text=False,
                  **kwargs):
         """
         Parameters
@@ -62,6 +63,7 @@ class InteractionTransitionPrior(nn.Module):
         self.add_prev_state = add_prev_state
         self.last_batch_prev_state = None
         self.variable_alignments = None
+        self.text = text
 
         # Create prior network. The prior network is a simple MLP with
         # the input of the previous latent variable z_i^t, all variables z^t,
@@ -88,31 +90,59 @@ class InteractionTransitionPrior(nn.Module):
             MultivarLinear(c_hid, 2, 
                            [self.num_latents])
         )
-        
+
+        if self.text:
+            self.text_encoder = SentenceTransformer()
+            for param in self.text_encoder.parameters():
+                param.requires_grad = False
+
+            self.text_MLP = TextMLP(self.text_encoder.model.config.hidden_size, c_hid // 4,
+                                hidden_dim=c_hid // 2,
+                                num_layers=2,
+                                non_linearity=nn.SiLU())
+
         # Action preprocessing network, i.e. the MLP for interaction variable prediction.
         if self.action_size == 2:
             # Encoding x-y coordinates via sinusoidal embeddings
             encoding_layer = SinusoidalEncoding(grid_size=img_width, 
                                                 out_dim=self.c_hid // 4,
                                                 input_dim=self.action_size)
+            self.encoding_layer = encoding_layer
             enc_dim = encoding_layer.get_output_dim(self.action_size)
+            if self.text:
+                enc_dim_with_text = enc_dim + self.c_hid // 4
         else:
             encoding_layer = nn.Identity()
             enc_dim = self.action_size
-        self.action_preprocess = MultivarSequential(
-            encoding_layer,
-            MultivarLinear(enc_dim + (self.num_latents if self.add_prev_state else 0), 
-                           self.c_hid,
-                           [self.num_latents]),
-            nn.SiLU(),
-            MultivarLinear(self.c_hid, 
-                           self.c_hid,
-                           [self.num_latents]),
-            nn.SiLU(),
-            MultivarLinear(self.c_hid, 
-                           1,
-                           [self.num_latents])
-        )
+        if self.text:
+            self.action_preprocess = MultivarSequential(
+                MultivarLinear(enc_dim_with_text + (self.num_latents if self.add_prev_state else 0), 
+                    self.c_hid,
+                    [self.num_latents]),
+                nn.SiLU(),
+                MultivarLinear(self.c_hid, 
+                    self.c_hid,
+                    [self.num_latents]),
+                nn.SiLU(),
+                    MultivarLinear(self.c_hid, 
+                    1,
+                    [self.num_latents])
+            )
+        else:
+            self.action_preprocess = MultivarSequential(
+                encoding_layer,
+                MultivarLinear(enc_dim + (self.num_latents if self.add_prev_state else 0), 
+                            self.c_hid,
+                            [self.num_latents]),
+                nn.SiLU(),
+                MultivarLinear(self.c_hid, 
+                            self.c_hid,
+                            [self.num_latents]),
+                nn.SiLU(),
+                MultivarLinear(self.c_hid, 
+                            1,
+                            [self.num_latents])
+            )
         if self.add_prev_state:
             # If we add the previous state, it is better to initialize the weights
             # to put equal importance on actions and previous states, since the
@@ -131,7 +161,7 @@ class InteractionTransitionPrior(nn.Module):
     def requires_prev_state(self):
         return self.add_prev_state
 
-    def _get_prior_params(self, z_t, action, detach_weights=False, **kwargs):
+    def _get_prior_params(self, z_t, action, tokenized_description=None, detach_weights=False, **kwargs):
         """
         Abstracting the execution of the networks for estimating the prior parameters.
 
@@ -147,6 +177,7 @@ class InteractionTransitionPrior(nn.Module):
         action_feats, extra_info = self._get_action_feats(action, 
                 z_t=z_t.reshape(action.shape[0], -1, z_t.shape[-1])[:,0], 
                 detach_weights=detach_weights,
+                tokenized_description=tokenized_description,
                 **kwargs)
         
         if z_t.shape[0] > action_feats.shape[0]:
@@ -168,7 +199,7 @@ class InteractionTransitionPrior(nn.Module):
         prior_params = [p.flatten(-2, -1) for p in prior_params]
         return prior_params, extra_info
 
-    def _get_action_feats(self, action, temp_factor=1.0, z_t=None, detach_weights=False, **kwargs):
+    def _get_action_feats(self, action, tokenized_description=None, temp_factor=1.0, z_t=None, detach_weights=False, **kwargs):
         """
         Determining the interaction variables from the action and previous time step.
 
@@ -192,6 +223,15 @@ class InteractionTransitionPrior(nn.Module):
                 self.last_batch_prev_state = z_t.detach()
         if action.ndim == 2:
             action = action[...,None,:].expand(-1, self.num_latents, -1)
+
+        if self.text:
+            with torch.no_grad():
+                text_embeddings = self.text_encoder(tokenized_description, tokenized=True)
+            text_embeddings = self.text_MLP(text_embeddings)
+            text_embeddings = text_embeddings.unsqueeze(dim=1).expand(-1, self.num_latents, -1)
+            encoded_action = self.encoding_layer(action)
+            action = torch.cat([encoded_action, text_embeddings], dim=-1)
+
         action = self.action_preprocess(action, detach_weights=detach_weights)
         abs_logits = torch.abs(action)
         action_logits = action
@@ -201,7 +241,7 @@ class InteractionTransitionPrior(nn.Module):
         action_feats = action_feats.unsqueeze(dim=1)
         return action_feats, {'action': action, 'abs_logits': abs_logits, 'action_logits': action_logits}
 
-    def get_interaction_quantization(self, action, prev_state=None, soft=False):
+    def get_interaction_quantization(self, action, prev_state=None, soft=False, tokenized_description=None):
         """
         Return (binarized) interaction variables.
 
@@ -225,6 +265,13 @@ class InteractionTransitionPrior(nn.Module):
                         prev_state = prev_state.unsqueeze(0)
                     prev_state = prev_state.expand(*action.shape[:-1], self.num_latents)
             action = torch.cat([action, prev_state], dim=-1)
+        
+        if self.text:
+            with torch.no_grad():
+                text_embeddings = self.text_encoder(tokenized_description, tokenized=True)
+            text_embeddings = self.text_MLP(text_embeddings)
+            encoded_action = self.encoding_layer(action)
+            action = torch.cat([encoded_action, text_embeddings], dim=-1)
         action = self.action_preprocess(action[...,None,:].expand(-1, self.num_latents, -1)).squeeze(dim=-1)
         if soft:
             action_idx = torch.tanh(action)
@@ -240,7 +287,7 @@ class InteractionTransitionPrior(nn.Module):
                                      z_t1_logstd=z_t1_logstd,
                                      z_t1_mean=z_t1_mean)
 
-    def sample_based_nll(self, z_t, z_t1, action, use_KLD=False, z_t1_logstd=None, z_t1_mean=None):
+    def sample_based_nll(self, z_t, z_t1, action, tokenized_description=None, use_KLD=False, z_t1_logstd=None, z_t1_mean=None):
         """
         Calculate the negative log likelihood of p(z^t1|z^t,I^t+1) in BISCUIT.
         For the NF, we cannot make use of the KL divergence since the normalizing flow 
@@ -269,6 +316,7 @@ class InteractionTransitionPrior(nn.Module):
         # Obtain estimated prior parameters for p(z^t1|z^t,I^t+1)
         prior_params, extra_info = self._get_prior_params(z_t.flatten(0, 1), 
                                                           action=action,
+                                                          tokenized_description=tokenized_description,
                                                           **extra_params)
 
         if not use_KLD:
@@ -288,7 +336,7 @@ class InteractionTransitionPrior(nn.Module):
 
         return loss
     
-    def sample(self, z_t, action, num_samples=1, **kwargs):
+    def sample(self, z_t, action, num_samples=1, tokenized_description=None, **kwargs):
         """
         Sample from the prior distribution p(z^t1|z^t,I^t+1) in BISCUIT.
 
@@ -302,7 +350,7 @@ class InteractionTransitionPrior(nn.Module):
                       Number of samples to draw from the prior
         """
         extra_params = self._prepare_prior_input()
-        prior_params, extra_info = self._get_prior_params(z_t, action=action, **extra_params)
+        prior_params, extra_info = self._get_prior_params(z_t, action=action, tokenized_description=tokenized_description, **extra_params)
         prior_mean, prior_logstd = prior_params
         z_t1 = torch.randn(z_t.shape[0], num_samples, self.num_latents, device=z_t.device)
         z_t1 = z_t1 * torch.exp(prior_logstd) + prior_mean

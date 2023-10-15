@@ -496,6 +496,7 @@ def perform_random_action(controller : Controller, last_step : dict):
     else:
         pickedObject = last_step['pickedObject']
 
+    description = f'{action_type} {object_name}'
     new_step = {
         'event': event,
         'pickedObject': pickedObject,
@@ -507,6 +508,7 @@ def perform_random_action(controller : Controller, last_step : dict):
             'action_counter': action_counter
         },
         'step_number': last_step['step_number'] + 1,
+        'description': description
     }
     return new_step
 
@@ -612,6 +614,7 @@ def generate_sequence(seed : int, output_folder : str, num_frames : int = 200, p
     collected_actions = np.zeros((num_frames, 2), dtype=np.float32)
     collected_states = defaultdict(lambda : np.zeros((num_frames,), dtype=np.float32))
     collected_segmentations = dict()
+    collected_descriptions = []
     debug_info = defaultdict(lambda : [])
     collected_frames[0] = event.frame
     for key, val in get_environment_state(event).items():
@@ -624,6 +627,7 @@ def generate_sequence(seed : int, output_folder : str, num_frames : int = 200, p
         last_step = perform_random_action(controller, last_step)
         collected_frames[i] = last_step['event'].frame
         collected_actions[i] = last_step['action_pos']
+        collected_descriptions.append(last_step['description'])
         for key, val in get_environment_state(last_step['event']).items():
             collected_states[key][i] = val
         for key, val in last_step['debug_info'].items():
@@ -644,6 +648,7 @@ def generate_sequence(seed : int, output_folder : str, num_frames : int = 200, p
                         latents=latents, 
                         targets=targets,
                         causal_keys=causal_keys,
+                        collected_descriptions=collected_descriptions,
                         **{'segm_'+k: collected_segmentations[k] for k in collected_segmentations})
     debug_info['causal_keys'] = causal_keys
     debug_info['seed'] = int(seed)
@@ -688,7 +693,7 @@ if __name__ == '__main__':
         if os.path.exists(out_file) and not overwrite:
             continue
         print('#' * 50 + '\n' + f'Generating sequence {seq_idx} of {num_sequences}...' + '\n' + '#' * 50)
-        collected_frames, collected_actions, collected_states = generate_sequence(seed=offset_seed + seq_idx, 
+        collected_frames, collected_actions, collected_states = generate_sequence(seed=int(offset_seed + seq_idx), 
                                                                                   output_folder=output_folder, 
                                                                                   num_frames=num_frames,
                                                                                   save_segmentations=save_segmentations,

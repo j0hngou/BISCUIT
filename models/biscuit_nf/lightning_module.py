@@ -49,6 +49,7 @@ class BISCUITNF(BISCUITVAE):
         """
         kwargs['no_encoder_decoder'] = True  # We do not need any additional en- or decoder
         super().__init__(*args, **kwargs)
+        self.text = kwargs.get('text', False)
         # Initialize the flow
         self.flow = AutoregNormalizingFlow(self.hparams.num_latents, 
                                            self.hparams.num_flows,
@@ -77,6 +78,8 @@ class BISCUITNF(BISCUITVAE):
         """ Main training method for calculating the loss """
         if len(batch) == 2:
             x_enc, action = batch
+        elif len(batch) == 5:
+            x_enc, action, input_ids, token_type_ids, attention_mask = batch
         else:
             x_enc, _, action = batch
         with torch.no_grad():
@@ -86,6 +89,10 @@ class BISCUITNF(BISCUITVAE):
             batch_size, seq_len, num_samples, num_latents = x_enc.shape
             x_sample = x_enc + torch.randn_like(x_enc) * self.hparams.noise_level
             x_sample = x_sample.flatten(0, 2)
+        if self.text:
+            tokenized_description = dict(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
+        else:
+            tokenized_description = None
         # Execute the flow
         z_sample, ldj = self.flow(x_sample)
         z_sample = z_sample.unflatten(0, (batch_size, seq_len, num_samples))
@@ -93,6 +100,7 @@ class BISCUITNF(BISCUITVAE):
         # Calculate the negative log likelihood of the transition prior
         nll = self.prior_t1.sample_based_nll(z_t=z_sample[:,:-1].flatten(0, 1),
                                              z_t1=z_sample[:,1:].flatten(0, 1),
+                                             tokenized_description=tokenized_description,
                                              action=action.flatten(0, 1))
         # Add LDJ and prior NLL for full loss
         ldj = ldj[:,1:].flatten(0, 1).mean(dim=-1)  # Taking the mean over samples
@@ -104,6 +112,28 @@ class BISCUITNF(BISCUITVAE):
         self.log(f'{mode}_ldj', ldj.mean())
 
         return loss
+
+    def configure_optimizers(self):
+        """ Setup the optimizer """
+        prior_text_params = list(self.prior_t1.text_MLP.parameters())
+        prior_t1_params = list(self.prior_t1.parameters())
+        flow_params = list(self.flow.parameters())
+        
+        all_params = prior_t1_params + flow_params
+        
+        if self.hparams.prior_action_add_prev_state:
+            action_MLP_params = list(self.prior_t1.action_MLP.parameters())
+            all_params += action_MLP_params
+
+        prior_text_params_set = set(prior_text_params)
+        all_params_set = set(all_params)
+        rest_params = list(all_params_set - prior_text_params_set)
+        
+        optimizer = torch.optim.Adam([{'params': prior_text_params, 'lr': self.hparams.lr_text},
+                                    {'params': rest_params, 'lr': self.hparams.lr}],
+                                    lr=self.hparams.lr)
+
+        return optimizer
 
     @staticmethod
     def get_callbacks(exmp_inputs=None, dataset=None, cluster=False, correlation_dataset=False, correlation_test_dataset=None, action_data_loader=None, **kwargs):

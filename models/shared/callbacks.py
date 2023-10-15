@@ -469,7 +469,16 @@ class InteractionVisualizationCallback(pl.Callback):
         all_pred_intvs = []
         prior_module = pl_module.prior_t1
         for batch in self.action_data_loader:
-            img_inp, *_, action_inp, true_intv = batch
+            if prior_module.text:
+                img_inp, *_, action_inp, true_intv, input_ids, token_type_ids, attention_mask = batch
+                input_ids = input_ids.to(pl_module.device)
+                token_type_ids = token_type_ids.to(pl_module.device)
+                attention_mask = attention_mask.to(pl_module.device)
+                tokenized_description = {'input_ids': input_ids,
+                                         'token_type_ids': token_type_ids,
+                                         'attention_mask': attention_mask}
+            else:
+                img_inp, *_, action_inp, true_intv = batch
             action_inp = action_inp.to(pl_module.device)
             true_intv = true_intv.to(pl_module.device)
             if len(action_inp.shape) > 2:
@@ -485,7 +494,7 @@ class InteractionVisualizationCallback(pl.Callback):
             if prior_module.requires_prev_state():
                 img_inp = img_inp.to(pl_module.device)
                 prev_state = pl_module.encode(img_inp[:,0])
-            pred_intv = prior_module.get_interaction_quantization(action_inp, prev_state=prev_state)
+            pred_intv = prior_module.get_interaction_quantization(action_inp, prev_state=prev_state, tokenized_description=tokenized_description if prior_module.text else None)
             all_pred_intvs.append(pred_intv)
 
         true_intv = torch.cat(all_true_intvs, dim=0).long()
@@ -540,8 +549,13 @@ class InteractionVisualizationCallback(pl.Callback):
             xy = torch.stack([x, y], dim=-1).flatten(0, 1)
             xy = xy.to(pl_module.device)
             outs = []
+            # TODO FIGURE OUT WHAT TO ENCODE HERE
+            with torch.no_grad():
+                tokenized_description_dummy = prior_module.text_encoder.tokenizer("You did nothing to no object", return_tensors="pt")
+                for item in tokenized_description_dummy.keys():
+                    tokenized_description_dummy[item] = tokenized_description_dummy[item].repeat(4096, 1).to(pl_module.device)
             for i in range(0, xy.shape[0], 4096):
-                outs.append(prior_module.get_interaction_quantization(xy[i:i+4096], soft=True))
+                outs.append(prior_module.get_interaction_quantization(xy[i:i+4096], soft=True, tokenized_description=tokenized_description_dummy if prior_module.text else None))
             pred_intv = torch.cat(outs, dim=0)
             pred_intv = pred_intv.unflatten(0, (x.shape[0], y.shape[0])).cpu().numpy()
             os.makedirs(os.path.join(trainer.logger.log_dir, 'interaction_matches'), exist_ok=True)
