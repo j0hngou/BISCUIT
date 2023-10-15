@@ -588,6 +588,7 @@ class iTHORDataset(data.Dataset):
                  cluster=False,
                  try_encodings=False,
                  categorical_actions=False,
+                 return_text=False,
                  **kwargs):
         super().__init__()
         self.cluster = cluster
@@ -612,6 +613,7 @@ class iTHORDataset(data.Dataset):
         self.try_encodings = try_encodings
         self.categorical_actions = categorical_actions
         self.seq_len = seq_len if not (single_image or triplet) else 1
+        self.return_text = return_text
 
         # Loading data
         data = self.load_data_from_folder(data_split_folder)
@@ -659,6 +661,10 @@ class iTHORDataset(data.Dataset):
             else:
                 assert False, f'Unknown causal key {key}'
         self.targets = data['targets'].float()
+        if self.return_text:
+            self.input_ids = data['input_ids'].long()
+            self.token_type_ids = data['token_type_ids'].long()
+            self.attention_mask = data['attention_mask'].long()
 
         # Robotic state
         if self.categorical_actions:
@@ -680,9 +686,19 @@ class iTHORDataset(data.Dataset):
         data = {}
         seq_files = sorted(glob(os.path.join(data_folder, '*seq_*.npz')))
         seq_files = [f for f in seq_files if not f.endswith('_encodings.npz')]
+        skipped = []
         for file_idx, file in enumerate(tqdm_track(seq_files, desc=f'Loading sequences of {self.split_name}', leave=False, cluster=self.cluster)):
             data_seq = np.load(file, allow_pickle=True)
+            # del data_seq['descriptions']
+            if file_idx == 0:
+                num_latents = data_seq['latents'].shape[1]
+            if data_seq['latents'].shape[1] != num_latents:
+                skipped.append(file)
+                print(f'WARNING: Skipping {file} because of inconsistent latent size!')
+                continue
             data_seq_keys = sorted(list(data_seq.keys()))
+            if 'collected_descriptions' in data_seq_keys:
+                data_seq_keys.remove('collected_descriptions')
             if self.try_encodings and os.path.isfile(file.replace('.npz', '_encodings.npz')):
                 data_seq_enc = np.load(file.replace('.npz', '_encodings.npz'), allow_pickle=True)
                 data_seq_keys.remove('frames')
@@ -819,6 +835,8 @@ class iTHORDataset(data.Dataset):
             returns += [rob]
         if self.return_targets:
             returns += [target]
+        if self.return_text:
+            returns += [self.input_ids[idx], self.token_type_ids[idx], self.attention_mask[idx]]
         if self.return_latents:
             returns += [lat]
 

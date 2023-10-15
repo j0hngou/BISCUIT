@@ -47,10 +47,12 @@ if __name__ == '__main__':
     parser.add_argument('--flow_act_fn', type=str, default='silu')
     parser.add_argument('--hidden_per_var', type=int, default=16)
     parser.add_argument('--act_fn', type=str, default='silu')
-    parser.add_argument('--num_latents', type=int, default=32)
+    parser.add_argument('--num_latents', type=int, default=40)
     parser.add_argument('--prior_action_add_prev_state', action="store_true")
     parser.add_argument('--try_encodings', type=bool, default=True)
     parser.add_argument('--logit_reg_factor', type=float, default=0.004)
+    parser.add_argument('--text', type=bool, default=True)
+    parser.add_argument('--lr_text', type=float, default=1e-4)
 
 
     args = parser.parse_args()
@@ -64,6 +66,7 @@ if __name__ == '__main__':
     if hasattr(datasets['train'], 'action_size'):
         model_args['action_size'] = datasets['train'].action_size()
     model_args['max_iters'] = args.max_epochs * len(data_loaders['train'])
+    model_args['text'] = args.text
     model_class = BISCUITNF
     logger_name = f'BISCUITNF_{args.num_latents}l_{datasets["train"].num_vars()}b_{args.c_hid}hid_{data_name}'
     args_logger_name = model_args.pop('logger_name')
