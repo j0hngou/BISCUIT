@@ -54,9 +54,9 @@ if __name__ == '__main__':
     parser.add_argument('--prior_action_add_prev_state', action="store_true")
     parser.add_argument('--try_encodings', type=bool, default=True)
     parser.add_argument('--logit_reg_factor', type=float, default=0.004)
-    parser.add_argument('--text', type=bool, default=False)
-    parser.add_argument('--lr_text', type=float, default=1e-4)
-    parser.add_argument('--wandb', type=bool, default=True)
+    parser.add_argument('--text', default=False, action="store_true")
+    parser.add_argument('--lr_text', type=float, default=1e-4, help='Learning rate for text model')
+    parser.add_argument('--wandb', default=True, action="store_true")
 
 
     args = parser.parse_args()
