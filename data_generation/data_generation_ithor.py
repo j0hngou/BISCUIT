@@ -597,7 +597,7 @@ def downscale_images(images : np.ndarray):
     images = images.astype(np.uint8)
     return images
 
-def generate_sequence(seed : int, output_folder : str, num_frames : int = 200, prefix : str = "", save_segmentations : bool = False):
+def generate_sequence(seed : int, output_folder : str, num_frames : int = 200, prefix : str = "", save_segmentations : bool = False, randomize_materials : bool = False, randomize_colors : bool = False, randomize_lighting : bool = False):
     print('-> Seed:', seed)
     attempts = 0
     success = False
@@ -623,6 +623,25 @@ def generate_sequence(seed : int, output_folder : str, num_frames : int = 200, p
         for key, val in get_object_segmentations(event).items():
             collected_segmentations[key] = np.zeros((num_frames, *val.shape), dtype=val.dtype)
             collected_segmentations[key][0] = val
+    if randomize_materials:
+        controller.step(
+            action='RandomizeMaterials',
+            useTrainMaterials=True if prefix.startswith('train') else False,
+            useValMaterials=True if prefix.startswith('val') else False,
+            useTestMaterials=True if prefix.startswith('test') else False,
+            inRoomTypes='Kitchen',
+        )
+    if randomize_colors:
+        controller.step(action="RandomizeColors")
+    if randomize_lighting:
+        controller.step(
+            action="RandomizeLighting",
+            brightness=(0.5, 1.5),
+            randomizeColor=True,
+            hue=(0, 1),
+            saturation=(0.5, 1),
+            synchronized=False
+        )
     for i in range(1,num_frames):
         last_step = perform_random_action(controller, last_step)
         collected_frames[i] = last_step['event'].frame
@@ -668,12 +687,26 @@ def print_time(time : float):
     return string
 
 if __name__ == '__main__':
-    output_folder = 'data/ithor/'
-    num_frames = 100
-    num_sequences = 1
-    prefix = 'train'
-    overwrite = True
-    save_segmentations = False
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--output_folder', type=str, default='/scratch-shared/gkounto/biscuit/data/ithor/')
+    parser.add_argument('--num_frames', type=int, default=100)
+    parser.add_argument('--num_sequences', type=int, default=300)
+    parser.add_argument('--prefix', type=str, default='train')    
+    parser.add_argument('--overwrite', action='store_true', default=False)
+    parser.add_argument('--save_segmentations', action='store_true', default=False)
+    parser.add_argument('--randomize_materials', action='store_true', default=False)
+    parser.add_argument('--randomize_colors', action='store_true', default=False)
+    args = parser.parse_args()
+
+    output_folder = args.output_folder
+    num_frames = args.num_frames
+    num_sequences = args.num_sequences
+    prefix = args.prefix
+    overwrite = args.overwrite
+    save_segmentations = args.save_segmentations
+    randomize_materials = args.randomize_materials
+    randomize_colors = args.randomize_colors
     output_folder = os.path.join(output_folder, prefix)
     hash = sha256(prefix.encode())
     offset_seed = np.frombuffer(hash.digest(), dtype='uint32')[0]
@@ -697,7 +730,10 @@ if __name__ == '__main__':
                                                                                   output_folder=output_folder, 
                                                                                   num_frames=num_frames,
                                                                                   save_segmentations=save_segmentations,
-                                                                                  prefix=f'{prefix}_')
+                                                                                  prefix=f'{prefix}_',
+                                                                                  randomize_materials=randomize_materials,
+                                                                                  randomize_colors=randomize_colors,
+                                                                                  randomize_lighting=True)
         if seq_idx == 1 and prefix == 'train':
             collected_frames = [frame for frame in collected_frames]
             exmp_folder = os.path.join(output_folder, f'{prefix}_seq_{str(seq_idx).zfill(6)}')
