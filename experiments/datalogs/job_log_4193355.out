@@ -1,0 +1,16 @@
+
+JOB STATISTICS
+==============
+Job ID: 4193355
+Array Job ID: 4193351_3
+Cluster: snellius
+User/Group: gkounto/gkounto
+State: RUNNING
+Nodes: 1
+Cores per node: 18
+CPU Utilized: 00:00:00
+CPU Efficiency: 0.00% of 00:02:06 core-walltime
+Job Wall-clock time: 00:00:07
+Memory Utilized: 0.00 MB (estimated maximum)
+Memory Efficiency: 0.00% of 117.19 GB (117.19 GB/node)
+WARNING: Efficiency statistics may be misleading for RUNNING jobs.

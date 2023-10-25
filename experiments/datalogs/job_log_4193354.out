@@ -1,0 +1,15 @@
+
+JOB STATISTICS
+==============
+Job ID: 4193354
+Array Job ID: 4193351_2
+Cluster: snellius
+User/Group: gkounto/gkounto
+State: CANCELLED (exit code 0)
+Nodes: 1
+Cores per node: 18
+CPU Utilized: 00:00:00
+CPU Efficiency: 0.00% of 00:01:48 core-walltime
+Job Wall-clock time: 00:00:06
+Memory Utilized: 0.00 MB (estimated maximum)
+Memory Efficiency: 0.00% of 117.19 GB (117.19 GB/node)

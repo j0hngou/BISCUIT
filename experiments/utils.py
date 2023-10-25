@@ -14,6 +14,8 @@ from shutil import copyfile
 import sys
 sys.path.append('../')
 from experiments.datasets import VoronoiDataset, CausalWorldDataset, iTHORDataset
+from pytorch_lightning.loggers import WandbLogger
+import wandb
 
 def get_device():
     return torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
@@ -148,6 +150,7 @@ def train_model(model_class, train_loader, val_loader,
                 val_track_metric='val_loss',
                 data_dir=None,
                 compile=False,
+                wandb_logger=None,
                 **kwargs):
     torch.set_float32_matmul_precision('medium')
     trainer_args = {}
@@ -158,7 +161,14 @@ def train_model(model_class, train_loader, val_loader,
         logger = pl.loggers.TensorBoardLogger(root_dir, 
                                               name=logger_name[0], 
                                               version=logger_name[1] if len(logger_name) > 1 else None)
-        trainer_args['logger'] = logger
+    if wandb_logger is not None:
+        if logger is not None:
+            print('Warning: Overwriting logger with WandB logger')
+        logger = wandb_logger
+        logger.log_hyperparams(kwargs)
+
+    
+    trainer_args['logger'] = logger
     if progress_bar_refresh_rate == 0:
         trainer_args['enable_progress_bar'] = False
 
@@ -187,7 +197,10 @@ def train_model(model_class, train_loader, val_loader,
     trainer.logger._default_hp_metric = None
 
     if files_to_save is not None:
-        log_dir = trainer.logger.log_dir
+        if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+            log_dir = trainer.logger.log_dir
+        else:
+            log_dir = wandb.run.dir
         os.makedirs(log_dir, exist_ok=True)
         for file in files_to_save:
             if os.path.isfile(file):

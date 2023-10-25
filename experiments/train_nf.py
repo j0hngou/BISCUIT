@@ -10,6 +10,9 @@ import sys
 sys.path.append('../')
 from models.biscuit_nf import BISCUITNF
 from experiments.utils import train_model, load_datasets, get_default_parser, print_params
+import wandb
+from pytorch_lightning.loggers import WandbLogger
+
 
 
 def encode_dataset(model, datasets):
@@ -51,8 +54,9 @@ if __name__ == '__main__':
     parser.add_argument('--prior_action_add_prev_state', action="store_true")
     parser.add_argument('--try_encodings', type=bool, default=True)
     parser.add_argument('--logit_reg_factor', type=float, default=0.004)
-    parser.add_argument('--text', type=bool, default=True)
+    parser.add_argument('--text', type=bool, default=False)
     parser.add_argument('--lr_text', type=float, default=1e-4)
+    parser.add_argument('--wandb', type=bool, default=True)
 
 
     args = parser.parse_args()
@@ -80,6 +84,17 @@ if __name__ == '__main__':
         callback_kwargs['action_data_loader'] = data_loaders['action']
 
     print_params(logger_name, model_args)
+
+    if args.wandb:
+        run = wandb.init(project="BISCUIT", name=logger_name, config=model_args)
+        wandb.config.update(args)
+        wandb.config.update(model_args)
+        wandb.config.update({'data_name': data_name})
+        logger = WandbLogger(name=logger_name, project="BISCUIT", config=model_args, experiment=run)
+        logger.log_hyperparams(model_args)
+    else:
+        logger = None
+
     
     check_val_every_n_epoch = model_args.pop('check_val_every_n_epoch')
     if check_val_every_n_epoch <= 0:
@@ -97,4 +112,5 @@ if __name__ == '__main__':
                 save_last_model=True,
                 cluster_logging=args.cluster,
                 causal_var_info=datasets['train'].get_causal_var_info(),
+                wandb_logger=logger,
                 **model_args)

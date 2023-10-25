@@ -21,6 +21,7 @@ from models.shared.visualization import visualize_reconstruction
 from models.shared.utils import log_matrix
 from models.shared.causal_encoder import CausalEncoder
 from experiments.datasets import iTHORDataset, CausalWorldDataset
+import wandb
 
 
 class ImageLogCallback(pl.Callback):
@@ -44,7 +45,10 @@ class ImageLogCallback(pl.Callback):
         def log_fig(tag, fig):
             if fig is None:
                 return
-            trainer.logger.experiment.add_figure(f'{self.prefix}{tag}', fig, global_step=trainer.global_step)
+            if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+                trainer.logger.experiment.add_figure(f'{self.prefix}{tag}', fig, global_step=trainer.global_step)
+            else:
+                wandb.log({f'{self.prefix}{tag}': wandb.Image(fig)}, step=trainer.global_step)
             plt.close(fig)
 
         if self.imgs is not None and (trainer.current_epoch+1) % self.every_n_epochs == 0:
@@ -365,7 +369,10 @@ class CorrelationMetricsLogCallback(pl.Callback):
             plt.title(title)
         fig.tight_layout()
 
-        trainer.logger.experiment.add_figure(tag + self.log_postfix, fig, global_step=trainer.global_step)
+        if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+            trainer.logger.experiment.add_figure(tag + self.log_postfix, fig, global_step=trainer.global_step)
+        else:
+            wandb.log({tag + self.log_postfix: wandb.Image(fig)}, step=trainer.global_step)
         plt.close(fig)
 
         if values.shape[0] == values.shape[1] + 1:
@@ -375,8 +382,12 @@ class CorrelationMetricsLogCallback(pl.Callback):
             avg_diag = np.diag(values).mean()
             max_off_diag = (values - np.eye(values.shape[0]) * 10).max(axis=-1).mean()
             if pl_module is None:
-                trainer.logger.experiment.add_scalar(f'corr_callback_{tag}_diag{self.log_postfix}', avg_diag, global_step=trainer.global_step)
-                trainer.logger.experiment.add_scalar(f'corr_callback_{tag}_max_off_diag{self.log_postfix}', max_off_diag, global_step=trainer.global_step)
+                if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+                    trainer.logger.experiment.add_scalar(f'corr_callback_{tag}_diag{self.log_postfix}', avg_diag, global_step=trainer.global_step)
+                    trainer.logger.experiment.add_scalar(f'corr_callback_{tag}_max_off_diag{self.log_postfix}', max_off_diag, global_step=trainer.global_step)
+                else:
+                    wandb.log({f'corr_callback_{tag}_diag{self.log_postfix}': avg_diag}, step=trainer.global_step)
+                    wandb.log({f'corr_callback_{tag}_max_off_diag{self.log_postfix}': max_off_diag}, step=trainer.global_step)
             else:
                 pl_module.log(f'corr_callback_{tag}_diag{self.log_postfix}', avg_diag)
                 pl_module.log(f'corr_callback_{tag}_max_off_diag{self.log_postfix}', max_off_diag)
@@ -522,7 +533,10 @@ class InteractionVisualizationCallback(pl.Callback):
             else:
                 best_acc = accs.max(axis=0).mean()
                 var_assignments = np.argmax(accs, axis=1)
-            trainer.logger.experiment.add_scalar(f'{self.prefix}interaction_match_f1', best_acc, global_step=trainer.global_step)
+            if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+                trainer.logger.experiment.add_scalar(f'{self.prefix}interaction_match_f1', best_acc, global_step=trainer.global_step)
+            else:
+                wandb.log({f'{self.prefix}interaction_match_f1': best_acc}, step=trainer.global_step)
             self.all_match_accuracies.append(best_acc)
             self.report_to_trial(trainer, best_acc)
             prior_module.set_variable_alignments(var_assignments)
@@ -538,7 +552,10 @@ class InteractionVisualizationCallback(pl.Callback):
             plt.xlabel('True Causal Variable Index')
             plt.ylabel('Predicted Interaction Variable Index')
             fig.tight_layout()
-            trainer.logger.experiment.add_figure(f'{self.prefix}interaction_matches', fig, global_step=trainer.global_step)
+            if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+                trainer.logger.experiment.add_figure(f'{self.prefix}interaction_matches', fig, global_step=trainer.global_step)
+            else:
+                wandb.log({f'{self.prefix}interaction_matches': wandb.Image(fig)}, step=trainer.global_step)
             plt.close(fig)
 
         if action_inp.shape[-1] == 2:
@@ -558,7 +575,10 @@ class InteractionVisualizationCallback(pl.Callback):
                 outs.append(prior_module.get_interaction_quantization(xy[i:i+4096], soft=True, tokenized_description=tokenized_description_dummy if prior_module.text else None))
             pred_intv = torch.cat(outs, dim=0)
             pred_intv = pred_intv.unflatten(0, (x.shape[0], y.shape[0])).cpu().numpy()
-            os.makedirs(os.path.join(trainer.logger.log_dir, 'interaction_matches'), exist_ok=True)
+            if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+                os.makedirs(os.path.join(trainer.logger.log_dir, 'interaction_matches'), exist_ok=True)
+            else:
+                os.makedirs(os.path.join(wandb.run.dir, 'interaction_matches'), exist_ok=True)
             extra_save_args = {}
             if hasattr(pl_module.prior_t1, 'last_batch_prev_state') and pl_module.prior_t1.last_batch_prev_state is not None:
                 prev_state = pl_module.prior_t1.last_batch_prev_state[0:1]
@@ -569,9 +589,14 @@ class InteractionVisualizationCallback(pl.Callback):
                     ae_rec = (ae_rec + 1.0) / 2.0
                     ae_rec = ae_rec[0].transpose(1, 2, 0)
                     extra_save_args['prev_img'] = ae_rec
-            np.savez_compressed(os.path.join(trainer.logger.log_dir, 'interaction_matches',
-                                             f'{self.prefix}interaction_matches_{str(trainer.current_epoch).zfill(5)}.npz'), 
-                                pred_intv=pred_intv, **extra_save_args)
+            if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+                np.savez_compressed(os.path.join(trainer.logger.log_dir, 'interaction_matches',
+                                                f'{self.prefix}interaction_matches_{str(trainer.current_epoch).zfill(5)}.npz'), 
+                                    pred_intv=pred_intv, **extra_save_args)
+            else:
+                np.savez_compressed(os.path.join(wandb.run.dir, 'interaction_matches',
+                                                f'{self.prefix}interaction_matches_{str(trainer.current_epoch).zfill(5)}.npz'), 
+                                    pred_intv=pred_intv, **extra_save_args)
             pred_intv = (pred_intv > 0).astype(np.int32)
             
             num_vars = pred_intv.shape[-1]
@@ -610,8 +635,12 @@ class InteractionVisualizationCallback(pl.Callback):
             plt.axis('off')
             plt.title('Learned space partitioning')
             fig.tight_layout()
-            trainer.logger.experiment.add_figure(f'{self.prefix}interaction_partitioning', fig, global_step=trainer.global_step)
-            trainer.logger.experiment.add_image(f'{self.prefix}interaction_partitioning_clean', img, global_step=trainer.global_step, dataformats='HWC')
+            if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+                trainer.logger.experiment.add_figure(f'{self.prefix}interaction_partitioning', fig, global_step=trainer.global_step)
+                trainer.logger.experiment.add_image(f'{self.prefix}interaction_partitioning_clean', img, global_step=trainer.global_step, dataformats='HWC')
+            else:
+                wandb.log({f'{self.prefix}interaction_partitioning': wandb.Image(fig)}, step=trainer.global_step)
+                wandb.log({f'{self.prefix}interaction_partitioning_clean': wandb.Image(img, caption='Learned space partitioning')}, step=trainer.global_step)
             plt.close(fig)
 
     def on_test_epoch_start(self, trainer, pl_module):

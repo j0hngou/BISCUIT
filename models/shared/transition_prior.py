@@ -147,8 +147,14 @@ class InteractionTransitionPrior(nn.Module):
             # If we add the previous state, it is better to initialize the weights
             # to put equal importance on actions and previous states, since the
             # previous state is usually much higher dimensional (e.g. 2/16 vs 40 in iTHOR)
-            self.action_preprocess[1].weight.data[...,enc_dim:] *= np.sqrt(enc_dim / self.num_latents)
-            self.action_preprocess[1].weight.data[...,:enc_dim] *= np.sqrt(self.num_latents / enc_dim)
+            # self.action_preprocess[1].weight.data[...,enc_dim:] *= np.sqrt(enc_dim / self.num_latents)
+            # self.action_preprocess[1].weight.data[...,:enc_dim] *= np.sqrt(self.num_latents / enc_dim)
+            if self.text:
+                self.action_preprocess[0].weight.data[...,enc_dim:] *= np.sqrt(enc_dim_with_text / self.num_latents)
+                self.action_preprocess[0].weight.data[...,:enc_dim] *= np.sqrt(self.num_latents / enc_dim_with_text)
+            else:
+                self.action_preprocess[1].weight.data[...,enc_dim:] *= np.sqrt(enc_dim / self.num_latents)
+                self.action_preprocess[1].weight.data[...,:enc_dim] *= np.sqrt(self.num_latents / enc_dim)
 
     def _prepare_prior_input(self):
         if self.training:

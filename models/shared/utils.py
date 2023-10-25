@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F 
 import numpy as np
 import os
+from pytorch_lightning.loggers import WandbLogger
 
 
 def get_act_fn(act_fn_name):
@@ -140,7 +141,10 @@ def log_dict(d, name, current_epoch=None, log_dir=None, trainer=None):
 def log_matrix(matrix, trainer, name, current_epoch=None, log_dir=None):
     """ Saves a numpy array to the logging directory """
     if log_dir is None:
-        log_dir = trainer.logger.log_dir
+        if isinstance(trainer.logger, WandbLogger):
+            log_dir = trainer.logger.experiment.dir
+        else:
+            log_dir = trainer.logger.log_dir
     filename = os.path.join(log_dir, name + '.npz')
 
     new_epoch = trainer.current_epoch if current_epoch is None else current_epoch

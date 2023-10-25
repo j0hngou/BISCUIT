@@ -1,5 +1,6 @@
 import torch
 from pytorch_lightning.callbacks import LearningRateMonitor
+from torch.optim import AdamW
 
 import sys
 sys.path.append('../')
@@ -7,7 +8,7 @@ from models.shared import get_act_fn, ImageLogCallback
 from models.ae import Autoencoder
 from models.biscuit_vae import BISCUITVAE
 from models.shared import AutoregNormalizingFlow
-from models.shared import InteractionVisualizationCallback, PermutationCorrelationMetricsLogCallback
+from models.shared import InteractionVisualizationCallback, PermutationCorrelationMetricsLogCallback, CosineWarmupScheduler
 
 
 class BISCUITNF(BISCUITVAE):
@@ -118,22 +119,26 @@ class BISCUITNF(BISCUITVAE):
         prior_text_params = list(self.prior_t1.text_MLP.parameters())
         prior_t1_params = list(self.prior_t1.parameters())
         flow_params = list(self.flow.parameters())
-        
+
         all_params = prior_t1_params + flow_params
-        
-        if self.hparams.prior_action_add_prev_state:
-            action_MLP_params = list(self.prior_t1.action_MLP.parameters())
-            all_params += action_MLP_params
+
+        # if self.hparams.prior_action_add_prev_state:
+        #     action_MLP_params = list(self.prior_t1.action_MLP.parameters())
+        #     all_params += action_MLP_params
 
         prior_text_params_set = set(prior_text_params)
         all_params_set = set(all_params)
         rest_params = list(all_params_set - prior_text_params_set)
-        
-        optimizer = torch.optim.Adam([{'params': prior_text_params, 'lr': self.hparams.lr_text},
-                                    {'params': rest_params, 'lr': self.hparams.lr}],
-                                    lr=self.hparams.lr)
 
-        return optimizer
+        optimizer = AdamW([{'params': prior_text_params, 'lr': self.hparams.lr_text},
+                        {'params': rest_params, 'lr': self.hparams.lr}],
+                        lr=self.hparams.lr, weight_decay=0.0)
+
+        lr_scheduler = CosineWarmupScheduler(optimizer,
+                                            warmup=self.hparams.warmup,
+                                            max_iters=self.hparams.max_iters)
+
+        return [optimizer], [{'scheduler': lr_scheduler, 'interval': 'step'}]
 
     @staticmethod
     def get_callbacks(exmp_inputs=None, dataset=None, cluster=False, correlation_dataset=False, correlation_test_dataset=None, action_data_loader=None, **kwargs):
