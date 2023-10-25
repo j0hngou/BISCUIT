@@ -697,6 +697,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_segmentations', action='store_true', default=False)
     parser.add_argument('--randomize_materials', action='store_true', default=False)
     parser.add_argument('--randomize_colors', action='store_true', default=False)
+    parser.add_argument('--randomize_lighting', action='store_true', default=False)
     args = parser.parse_args()
 
     output_folder = args.output_folder
