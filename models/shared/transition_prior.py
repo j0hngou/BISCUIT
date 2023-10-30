@@ -6,7 +6,7 @@ import sys
 sys.path.append('../../')
 from models.shared.utils import kl_divergence, gaussian_log_prob
 from models.shared.modules import MultivarLinear, MultivarSequential, LinearScheduler, SinusoidalEncoding
-from models.shared.text_models import SentenceTransformer, TextMLP
+from models.shared.text_models import SentenceTransformer, TextMLP, SigLIP
 
 def create_interaction_prior(*args, extra_args=None, **kwargs):
     if extra_args is None:
@@ -64,6 +64,10 @@ class InteractionTransitionPrior(nn.Module):
         self.last_batch_prev_state = None
         self.variable_alignments = None
         self.text = text
+        if self.text:
+            if kwargs.get('text_encoder', None) is None:
+                kwargs['text_encoder'] = 'sentence_transformer'
+            text_encoder = kwargs['text_encoder']
 
         # Create prior network. The prior network is a simple MLP with
         # the input of the previous latent variable z_i^t, all variables z^t,
@@ -92,11 +96,19 @@ class InteractionTransitionPrior(nn.Module):
         )
 
         if self.text:
-            self.text_encoder = SentenceTransformer()
+            valid_text_encoders = ['sentence_transformer', 'siglip']
+            if text_encoder == 'sentence_transformer':
+                self.text_encoder = SentenceTransformer()
+                text_proj_dim = self.text_encoder.model.config.hidden_size
+            elif text_encoder == 'siglip':
+                self.text_encoder = SigLIP()
+                text_proj_dim = self.text_projection.out_features
+            else:
+                raise ValueError(f'Unknown text encoder {text_encoder}. Valid options are {valid_text_encoders}')
             for param in self.text_encoder.parameters():
                 param.requires_grad = False
 
-            self.text_MLP = TextMLP(self.text_encoder.model.config.hidden_size, c_hid // 4,
+            self.text_MLP = TextMLP(text_proj_dim, c_hid // 4,
                                 hidden_dim=c_hid // 2,
                                 num_layers=2,
                                 non_linearity=nn.SiLU())

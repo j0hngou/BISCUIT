@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from transformers import AutoTokenizer, AutoModel
 from abc import ABC, abstractmethod
+from open_clip import create_model_from_pretrained, get_tokenizer
 
 class TextEncoder(nn.Module):
     def __init__(self, model_name):
@@ -39,6 +40,34 @@ class SentenceTransformer(TextEncoder):
 
         return sentence_embeddings
 
+class SigLIP(nn.Module):
+    """
+    SigLIP
+    """
+    def __init__(self, model_name='hf-hub:timm/ViT-B-16-SigLIP'):
+        super(SigLIP, self).__init__()
+        self.tokenizer = get_tokenizer(model_name)
+        self.model = create_model_from_pretrained(model_name)[0]
+        self.model.eval()
+        del self.model.visual
+        self.model = self.model.text
+
+    def forward(self, inp, tokenized=True):
+        if tokenized:
+            encoded_input = inp
+        else:
+            encoded_input = self.tokenizer(inp, context_length=self.model.context_length)
+
+        # We get the encoded input from the tokenizer as a dictionary with the keys
+        # 'input_ids', 'token_type_ids' and 'attention_mask'. We need to remove the
+        # 'token_type_ids' and 'attention_mask' keys as they are not used by the model.
+        encoded_input = encoded_input['input_ids']
+        with torch.no_grad():
+            sentence_embeddings = self.model(encoded_input)
+
+        return sentence_embeddings
+
+        
 class TextMLP(nn.Module):
     """
     MLP for text embeddings
