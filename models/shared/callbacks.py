@@ -567,10 +567,11 @@ class InteractionVisualizationCallback(pl.Callback):
             xy = xy.to(pl_module.device)
             outs = []
             # TODO FIGURE OUT WHAT TO ENCODE HERE
-            with torch.no_grad():
-                tokenized_description_dummy = prior_module.text_encoder.tokenizer("You did nothing to no object", return_tensors="pt")
-                for item in tokenized_description_dummy.keys():
-                    tokenized_description_dummy[item] = tokenized_description_dummy[item].repeat(4096, 1).to(pl_module.device)
+            if prior_module.text:
+                with torch.no_grad():
+                    tokenized_description_dummy = prior_module.text_encoder.tokenizer("You did nothing to no object", return_tensors="pt")
+                    for item in tokenized_description_dummy.keys():
+                        tokenized_description_dummy[item] = tokenized_description_dummy[item].repeat(4096, 1).to(pl_module.device)
             for i in range(0, xy.shape[0], 4096):
                 outs.append(prior_module.get_interaction_quantization(xy[i:i+4096], soft=True, tokenized_description=tokenized_description_dummy if prior_module.text else None))
             pred_intv = torch.cat(outs, dim=0)

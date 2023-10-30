@@ -4,12 +4,14 @@ import torch.optim as optim
 import torch.nn.functional as F
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.loggers import WandbLogger
 import numpy as np
 from copy import deepcopy
 
 import sys
 sys.path.append('../../')
 from models.shared import CosineWarmupScheduler, Encoder, Decoder, visualize_ae_reconstruction, SimpleEncoder, SimpleDecoder
+import wandb
 
 
 class Autoencoder(pl.LightningModule):
@@ -191,7 +193,11 @@ class AELogCallback(pl.Callback):
 
     def on_train_epoch_end(self, trainer, pl_module):
         def log_fig(tag, fig):
-            trainer.logger.experiment.add_image(f'{self.prefix}{tag}', fig, global_step=trainer.global_step, dataformats='HWC')
+            if isinstance(trainer.logger, WandbLogger):
+                fig = wandb.Image(fig)
+                trainer.logger.experiment.log({f'{self.prefix}{tag}': fig}, step=trainer.global_step)
+            else:
+                trainer.logger.experiment.add_image(f'{self.prefix}{tag}', fig, global_step=trainer.global_step, dataformats='HWC')
 
         if self.imgs is not None and (trainer.current_epoch+1) % self.every_n_epochs == 0:
             images = self.imgs.to(trainer.model.device)

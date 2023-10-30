@@ -116,24 +116,27 @@ class BISCUITNF(BISCUITVAE):
 
     def configure_optimizers(self):
         """ Setup the optimizer """
-        prior_text_params = list(self.prior_t1.text_MLP.parameters())
-        prior_t1_params = list(self.prior_t1.parameters())
-        flow_params = list(self.flow.parameters())
+        if self.text:
+            prior_text_params = list(self.prior_t1.text_MLP.parameters())
+            prior_t1_params = list(self.prior_t1.parameters())
+            flow_params = list(self.flow.parameters())
 
-        all_params = prior_t1_params + flow_params
+            all_params = prior_t1_params + flow_params
 
-        # if self.hparams.prior_action_add_prev_state:
-        #     action_MLP_params = list(self.prior_t1.action_MLP.parameters())
-        #     all_params += action_MLP_params
+            # if self.hparams.prior_action_add_prev_state:
+            #     action_MLP_params = list(self.prior_t1.action_MLP.parameters())
+            #     all_params += action_MLP_params
 
-        prior_text_params_set = set(prior_text_params)
-        all_params_set = set(all_params)
-        rest_params = list(all_params_set - prior_text_params_set)
+            prior_text_params_set = set(prior_text_params)
+            all_params_set = set(all_params)
+            rest_params = list(all_params_set - prior_text_params_set)
 
-        optimizer = AdamW([{'params': prior_text_params, 'lr': self.hparams.lr_text},
-                        {'params': rest_params, 'lr': self.hparams.lr}],
-                        lr=self.hparams.lr, weight_decay=0.0)
+            optimizer = AdamW([{'params': prior_text_params, 'lr': self.hparams.lr_text},
+                            {'params': rest_params, 'lr': self.hparams.lr}],
+                            lr=self.hparams.lr, weight_decay=0.0)
 
+        else:
+            optimizer = AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=0.0)
         lr_scheduler = CosineWarmupScheduler(optimizer,
                                             warmup=self.hparams.warmup,
                                             max_iters=self.hparams.max_iters)
