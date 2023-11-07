@@ -131,7 +131,7 @@ class BISCUITNF(BISCUITVAE):
             all_params_set = set(all_params)
             rest_params = list(all_params_set - prior_text_params_set)
 
-            optimizer = AdamW([{'params': prior_text_params, 'lr': self.hparams.lr_text},
+            optimizer = AdamW([{'params': prior_text_params, 'lr': self.hparams.lr_text, 'weight_decay': 0.01},
                             {'params': rest_params, 'lr': self.hparams.lr}],
                             lr=self.hparams.lr, weight_decay=0.0)
 

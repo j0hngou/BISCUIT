@@ -20,6 +20,11 @@ import wandb
 def get_device():
     return torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
 
+def resolve_symlink(path):
+    if os.path.islink(path):
+        return os.readlink(path)
+    return path
+
 def get_default_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, required=True)
@@ -28,8 +33,8 @@ def get_default_parser():
     parser.add_argument('--max_epochs', type=int, default=200)
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--offline', action='store_true')
-    parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--num_workers', type=int, default=4)
+    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--num_workers', type=int, default=18)
     parser.add_argument('--data_img_width', type=int, default=-1)
     parser.add_argument('--seq_len', type=int, default=2)
     parser.add_argument('--lr', type=float, default=1e-3)
@@ -60,15 +65,15 @@ def load_datasets(args):
     if hasattr(args, 'try_encodings'):
         dataset_args['try_encodings'] = args.try_encodings
     train_dataset = DataClass(
-        data_folder=args.data_dir, split='train', single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, **dataset_args)
+        data_folder=args.data_dir, split='train', single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=args.subsample_percentage, **dataset_args)
     val_dataset = DataClass(
-        data_folder=args.data_dir, split='val_indep', single_image=True, triplet=False, return_latents=True, cluster=args.cluster, return_text=args.text, **dataset_args)
+         data_folder=args.data_dir, split='val_indep', single_image=True, return_latents=True, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=1.0, **dataset_args)
     val_seq_dataset = DataClass(
-        data_folder=args.data_dir, split='val', single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, **dataset_args)
+        data_folder=args.data_dir, split='val', single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=1.0, **dataset_args)
     test_dataset = DataClass(
-        data_folder=args.data_dir, split='test_indep', single_image=True, triplet=False, return_latents=True, cluster=args.cluster, return_text=args.text, **dataset_args)
+          data_folder=args.data_dir, split='test_indep', single_image=True, return_latents=True, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=1.0, **dataset_args)
     test_seq_dataset = DataClass(
-        data_folder=args.data_dir, split='test', single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, **dataset_args)
+        data_folder=args.data_dir, split='test', single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=1.0, **dataset_args)
     train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size,
                                    shuffle=True, pin_memory=True, drop_last=True, num_workers=args.num_workers)
     val_seq_loader = data.DataLoader(val_seq_dataset, batch_size=args.batch_size,
@@ -166,6 +171,7 @@ def train_model(model_class, train_loader, val_loader,
             print('Warning: Overwriting logger with WandB logger')
         logger = wandb_logger
         logger.log_hyperparams(kwargs)
+        root_dir = logger.experiment.dir + '/checkpoints/'
 
     
     trainer_args['logger'] = logger
@@ -239,7 +245,12 @@ def train_model(model_class, train_loader, val_loader,
         if save_last_model:
             model_paths += [(trainer.checkpoint_callback.last_model_path, "last")]
         for file_path, prefix in model_paths:
-            model = model_class.load_from_checkpoint(file_path)
+            resolved_path = resolve_symlink(file_path)
+            # Now verify if this resolved path actually exists
+            if not os.path.exists(resolved_path):
+                print(f"Warning: {resolved_path} does not exist. Skipping...")
+                continue
+            model = model_class.load_from_checkpoint(resolved_path)
             test_result = trainer.test(model, dataloaders=test_loader, verbose=False)
             test_result = test_result[0]
             print('='*50)
@@ -249,6 +260,9 @@ def train_model(model_class, train_loader, val_loader,
                 print(key + ':', test_result[key])
             print('='*50)
 
-            log_file = os.path.join(trainer.logger.log_dir, f'test_results_{prefix}.json')
+            if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+                log_file = os.path.join(trainer.logger.log_dir, f'test_results_{prefix}.json')
+            else:
+                log_file = os.path.join(wandb.run.dir, f'test_results_{prefix}.json')
             with open(log_file, 'w') as f:
                 json.dump(test_result, f, indent=4)

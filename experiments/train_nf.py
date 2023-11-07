@@ -57,6 +57,8 @@ if __name__ == '__main__':
     parser.add_argument('--text', default=False, action="store_true")
     parser.add_argument('--lr_text', type=float, default=1e-4, help='Learning rate for text model')
     parser.add_argument('--wandb', default=True, action="store_true")
+    parser.add_argument('--text_encoder', type=str, default='sentence_transformer', help='Which text encoder to use')
+    parser.add_argument('--subsample_percentage', type=float, default=1.0)
 
 
     args = parser.parse_args()
@@ -72,7 +74,8 @@ if __name__ == '__main__':
     model_args['max_iters'] = args.max_epochs * len(data_loaders['train'])
     model_args['text'] = args.text
     model_class = BISCUITNF
-    logger_name = f'BISCUITNF_{args.num_latents}l_{datasets["train"].num_vars()}b_{args.c_hid}hid_{data_name}'
+    textornot = 'text' if args.text else 'notext'
+    logger_name = f'BISCUITNF_{args.num_latents}l_{datasets["train"].num_vars()}b_{args.c_hid}hid_{data_name}_{textornot}_ss{args.subsample_percentage}'
     args_logger_name = model_args.pop('logger_name')
     if len(args_logger_name) > 0:
         logger_name += '/' + args_logger_name
@@ -86,7 +89,7 @@ if __name__ == '__main__':
     print_params(logger_name, model_args)
 
     if args.wandb:
-        run = wandb.init(project="BISCUIT", name=logger_name, config=model_args)
+        run = wandb.init(project="BISCUIT", name=logger_name, config=model_args, dir='/scratch-shared/gkounto/wandb')
         wandb.config.update(args)
         wandb.config.update(model_args)
         wandb.config.update({'data_name': data_name})

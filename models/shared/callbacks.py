@@ -346,6 +346,7 @@ class CorrelationMetricsLogCallback(pl.Callback):
                           pl_module=pl_module)
 
     def _log_heatmap(self, trainer, values, tag, title=None, xticks=None, yticks=None, xlabel=None, ylabel=None, pl_module=None):
+        is_test = self.log_postfix.endswith('_test')
         if ylabel is None:
             ylabel = 'Target dimension'
         if xlabel is None:
@@ -372,7 +373,7 @@ class CorrelationMetricsLogCallback(pl.Callback):
         if not isinstance(trainer.logger, pl.loggers.WandbLogger):
             trainer.logger.experiment.add_figure(tag + self.log_postfix, fig, global_step=trainer.global_step)
         else:
-            wandb.log({tag + self.log_postfix: wandb.Image(fig)}, step=trainer.global_step)
+            wandb.log({tag + self.log_postfix: wandb.Image(fig)}, step=trainer.global_step + 100 if is_test else trainer.global_step)
         plt.close(fig)
 
         if values.shape[0] == values.shape[1] + 1:
@@ -386,8 +387,8 @@ class CorrelationMetricsLogCallback(pl.Callback):
                     trainer.logger.experiment.add_scalar(f'corr_callback_{tag}_diag{self.log_postfix}', avg_diag, global_step=trainer.global_step)
                     trainer.logger.experiment.add_scalar(f'corr_callback_{tag}_max_off_diag{self.log_postfix}', max_off_diag, global_step=trainer.global_step)
                 else:
-                    wandb.log({f'corr_callback_{tag}_diag{self.log_postfix}': avg_diag}, step=trainer.global_step)
-                    wandb.log({f'corr_callback_{tag}_max_off_diag{self.log_postfix}': max_off_diag}, step=trainer.global_step)
+                    wandb.log({f'corr_callback_{tag}_diag{self.log_postfix}': avg_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+                    wandb.log({f'corr_callback_{tag}_max_off_diag{self.log_postfix}': max_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
             else:
                 pl_module.log(f'corr_callback_{tag}_diag{self.log_postfix}', avg_diag)
                 pl_module.log(f'corr_callback_{tag}_max_off_diag{self.log_postfix}', max_off_diag)
@@ -476,6 +477,7 @@ class InteractionVisualizationCallback(pl.Callback):
 
     @torch.no_grad()
     def on_validation_epoch_start(self, trainer, pl_module):
+        is_test = self.prefix.startswith('test')
         all_true_intvs = []
         all_pred_intvs = []
         prior_module = pl_module.prior_t1
@@ -536,7 +538,7 @@ class InteractionVisualizationCallback(pl.Callback):
             if not isinstance(trainer.logger, pl.loggers.WandbLogger):
                 trainer.logger.experiment.add_scalar(f'{self.prefix}interaction_match_f1', best_acc, global_step=trainer.global_step)
             else:
-                wandb.log({f'{self.prefix}interaction_match_f1': best_acc}, step=trainer.global_step)
+                wandb.log({f'{self.prefix}interaction_match_f1': best_acc}, step=trainer.global_step + 100 if is_test else trainer.global_step)
             self.all_match_accuracies.append(best_acc)
             self.report_to_trial(trainer, best_acc)
             prior_module.set_variable_alignments(var_assignments)
@@ -555,7 +557,7 @@ class InteractionVisualizationCallback(pl.Callback):
             if not isinstance(trainer.logger, pl.loggers.WandbLogger):
                 trainer.logger.experiment.add_figure(f'{self.prefix}interaction_matches', fig, global_step=trainer.global_step)
             else:
-                wandb.log({f'{self.prefix}interaction_matches': wandb.Image(fig)}, step=trainer.global_step)
+                wandb.log({f'{self.prefix}interaction_matches': wandb.Image(fig)}, step=trainer.global_step + 100 if is_test else trainer.global_step)
             plt.close(fig)
 
         if action_inp.shape[-1] == 2:
@@ -567,13 +569,24 @@ class InteractionVisualizationCallback(pl.Callback):
             xy = xy.to(pl_module.device)
             outs = []
             # TODO FIGURE OUT WHAT TO ENCODE HERE
+            tokenized = None
             if prior_module.text:
-                with torch.no_grad():
-                    tokenized_description_dummy = prior_module.text_encoder.tokenizer("You did nothing to no object", return_tensors="pt")
-                    for item in tokenized_description_dummy.keys():
-                        tokenized_description_dummy[item] = tokenized_description_dummy[item].repeat(4096, 1).to(pl_module.device)
+                # tokenized_description_dummy = prior_module.text_encoder.tokenizer("You did nothing to no object", return_tensors="pt")
+                # Check if using SigLIP or SentenceTransformer
+                if prior_module.text_encoder.__class__.__name__ == 'SentenceTransformer':
+                    description_dummy = prior_module.text_encoder.tokenizer("You did nothing to no object", return_tensors="pt")
+                    tokenized = True
+                    for item in description_dummy.keys():
+                        description_dummy[item] = description_dummy[item].repeat(4096, 1).to(pl_module.device)
+                elif prior_module.text_encoder.__class__.__name__ == 'SigLIP':
+                    description_dummy = "You did nothing to no object"
+                    tokenized = False
+                else:
+                    raise NotImplementedError
+                    
+                    
             for i in range(0, xy.shape[0], 4096):
-                outs.append(prior_module.get_interaction_quantization(xy[i:i+4096], soft=True, tokenized_description=tokenized_description_dummy if prior_module.text else None))
+                outs.append(prior_module.get_interaction_quantization(xy[i:i+4096], soft=True, tokenized_description=description_dummy if prior_module.text else None, tokenized=tokenized))
             pred_intv = torch.cat(outs, dim=0)
             pred_intv = pred_intv.unflatten(0, (x.shape[0], y.shape[0])).cpu().numpy()
             if not isinstance(trainer.logger, pl.loggers.WandbLogger):
@@ -640,8 +653,8 @@ class InteractionVisualizationCallback(pl.Callback):
                 trainer.logger.experiment.add_figure(f'{self.prefix}interaction_partitioning', fig, global_step=trainer.global_step)
                 trainer.logger.experiment.add_image(f'{self.prefix}interaction_partitioning_clean', img, global_step=trainer.global_step, dataformats='HWC')
             else:
-                wandb.log({f'{self.prefix}interaction_partitioning': wandb.Image(fig)}, step=trainer.global_step)
-                wandb.log({f'{self.prefix}interaction_partitioning_clean': wandb.Image(img, caption='Learned space partitioning')}, step=trainer.global_step)
+                wandb.log({f'{self.prefix}interaction_partitioning': wandb.Image(fig)}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+                wandb.log({f'{self.prefix}interaction_partitioning_clean': wandb.Image(img, caption='Learned space partitioning')}, step=trainer.global_step + 100 if is_test else trainer.global_step)
             plt.close(fig)
 
     def on_test_epoch_start(self, trainer, pl_module):

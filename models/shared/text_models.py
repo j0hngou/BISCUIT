@@ -51,19 +51,31 @@ class SigLIP(nn.Module):
         self.model.eval()
         del self.model.visual
         self.model = self.model.text
+        self.dummy_param = nn.Parameter(torch.empty(0))
+
 
     def forward(self, inp, tokenized=True):
         if tokenized:
             encoded_input = inp
         else:
-            encoded_input = self.tokenizer(inp, context_length=self.model.context_length)
+            encoded_input = {'input_ids' : self.tokenizer(inp, context_length=self.model.context_length)}
 
         # We get the encoded input from the tokenizer as a dictionary with the keys
         # 'input_ids', 'token_type_ids' and 'attention_mask'. We need to remove the
         # 'token_type_ids' and 'attention_mask' keys as they are not used by the model.
         encoded_input = encoded_input['input_ids']
+        encoded_input = encoded_input.to(self.dummy_param.device)
+        encoded_input_shape = encoded_input.size()
+        # If there's a sequence the input might come as a 2d tensor of (batch_size, sequence_length, tokens)
+        if len(encoded_input_shape) == 3:
+            encoded_input = encoded_input.view(-1, encoded_input.size(-1))
+
         with torch.no_grad():
             sentence_embeddings = self.model(encoded_input)
+            # Reshape back to the original shape
+            # if len(encoded_input_shape) == 3:
+            #     sentence_embeddings = sentence_embeddings.view(encoded_input.size(0), encoded_input.size(1), -1)
+
 
         return sentence_embeddings
 

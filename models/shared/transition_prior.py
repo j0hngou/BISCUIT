@@ -102,7 +102,7 @@ class InteractionTransitionPrior(nn.Module):
                 text_proj_dim = self.text_encoder.model.config.hidden_size
             elif text_encoder == 'siglip':
                 self.text_encoder = SigLIP()
-                text_proj_dim = self.text_projection.out_features
+                text_proj_dim = self.text_encoder.model.text_projection.out_features
             else:
                 raise ValueError(f'Unknown text encoder {text_encoder}. Valid options are {valid_text_encoders}')
             for param in self.text_encoder.parameters():
@@ -259,7 +259,7 @@ class InteractionTransitionPrior(nn.Module):
         action_feats = action_feats.unsqueeze(dim=1)
         return action_feats, {'action': action, 'abs_logits': abs_logits, 'action_logits': action_logits}
 
-    def get_interaction_quantization(self, action, prev_state=None, soft=False, tokenized_description=None):
+    def get_interaction_quantization(self, action, prev_state=None, soft=False, tokenized_description=None, tokenized=True):
         """
         Return (binarized) interaction variables.
 
@@ -286,9 +286,11 @@ class InteractionTransitionPrior(nn.Module):
         
         if self.text:
             with torch.no_grad():
-                text_embeddings = self.text_encoder(tokenized_description, tokenized=True)
+                text_embeddings = self.text_encoder(tokenized_description, tokenized=tokenized)
             text_embeddings = self.text_MLP(text_embeddings)
             encoded_action = self.encoding_layer(action)
+            if not tokenized:
+                text_embeddings = text_embeddings.repeat(encoded_action.shape[0], 1)
             action = torch.cat([encoded_action, text_embeddings], dim=-1)
         action = self.action_preprocess(action[...,None,:].expand(-1, self.num_latents, -1)).squeeze(dim=-1)
         if soft:
