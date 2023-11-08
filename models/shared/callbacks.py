@@ -397,7 +397,7 @@ class CorrelationMetricsLogCallback(pl.Callback):
                 wandb.log({f'corr_callback_{tag}_max_off_diag{self.log_postfix}': max_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
 
         if isinstance(self.dataset, iTHORDataset):
-            if values.shape[1] == 18:
+            if values.shape[1] == 18 and values.shape[0] == 10:
                 tvalues = torch.from_numpy(values)
                 tvalues = torch.cat([tvalues[:, :1], tvalues[:, 1:7].mean(dim=-1, keepdims=True),
                         tvalues[:, 7:9], tvalues[:,9:13].mean(dim=-1, keepdims=True), tvalues[:,13:]], dim=-1).abs()
