@@ -389,9 +389,44 @@ class CorrelationMetricsLogCallback(pl.Callback):
                 else:
                     wandb.log({f'corr_callback_{tag}_diag{self.log_postfix}': avg_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
                     wandb.log({f'corr_callback_{tag}_max_off_diag{self.log_postfix}': max_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
-            else:
+            elif not isinstance(pl_module.logger, pl.loggers.WandbLogger):
                 pl_module.log(f'corr_callback_{tag}_diag{self.log_postfix}', avg_diag)
                 pl_module.log(f'corr_callback_{tag}_max_off_diag{self.log_postfix}', max_off_diag)
+            else:
+                wandb.log({f'corr_callback_{tag}_diag{self.log_postfix}': avg_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+                wandb.log({f'corr_callback_{tag}_max_off_diag{self.log_postfix}': max_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+
+        if isinstance(self.dataset, iTHORDataset):
+            if values.shape[1] == 18:
+                tvalues = torch.from_numpy(values)
+                tvalues = torch.cat([tvalues[:, :1], tvalues[:, 1:7].mean(dim=-1, keepdims=True),
+                        tvalues[:, 7:9], tvalues[:,9:13].mean(dim=-1, keepdims=True), tvalues[:,13:]], dim=-1).abs()
+                row_ind, col_ind = linear_sum_assignment(tvalues, maximize=True)
+                permuted_tvalues = tvalues[:, col_ind]
+                permuted_tvalues = permuted_tvalues[row_ind, :]
+                diagonal_mask = torch.eye(permuted_tvalues.size(0), dtype=torch.bool)
+                non_diagonal_mask = ~diagonal_mask
+                non_diagonal_elements = permuted_tvalues[non_diagonal_mask]
+                r2_avg_diag = permuted_tvalues.trace() / permuted_tvalues.size(0)
+                max_off_diag = non_diagonal_elements.max()
+                r2_avg_off_diag = non_diagonal_elements.mean()
+                if pl_module is None:
+                    if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+                        trainer.logger.experiment.add_scalar(f'corr_callback_{tag}_diag_grouped_latents{self.log_postfix}', r2_avg_diag, global_step=trainer.global_step)
+                        trainer.logger.experiment.add_scalar(f'corr_callback_{tag}_max_off_diag_grouped_latents{self.log_postfix}', max_off_diag, global_step=trainer.global_step)
+                        trainer.logger.experiment.add_scalar(f'corr_callback_{tag}_off_diag_grouped_latents{self.log_postfix}', r2_avg_off_diag, global_step=trainer.global_step)
+                    else:
+                        wandb.log({f'corr_callback_{tag}_diag_grouped_latents{self.log_postfix}': r2_avg_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+                        wandb.log({f'corr_callback_{tag}_max_off_diag_grouped_latents{self.log_postfix}': max_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+                        wandb.log({f'corr_callback_{tag}_off_diag_grouped_latents{self.log_postfix}': r2_avg_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+                elif not isinstance(pl_module.logger, pl.loggers.WandbLogger):
+                    pl_module.log(f'corr_callback_{tag}_diag_grouped_latents{self.log_postfix}', r2_avg_diag)
+                    pl_module.log(f'corr_callback_{tag}_max_off_diag_grouped_latents{self.log_postfix}', max_off_diag)
+                    pl_module.log(f'corr_callback_{tag}_off_diag_grouped_latents{self.log_postfix}', r2_avg_off_diag)
+                else:
+                    wandb.log({f'corr_callback_{tag}_diag_grouped_latents{self.log_postfix}': r2_avg_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+                    wandb.log({f'corr_callback_{tag}_max_off_diag_grouped_latents{self.log_postfix}': max_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+                    wandb.log({f'corr_callback_{tag}_off_diag_grouped_latents{self.log_postfix}': r2_avg_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
 
 
 class PermutationCorrelationMetricsLogCallback(CorrelationMetricsLogCallback):
