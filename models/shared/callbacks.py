@@ -614,7 +614,7 @@ class InteractionVisualizationCallback(pl.Callback):
                     for item in description_dummy.keys():
                         description_dummy[item] = description_dummy[item].repeat(4096, 1).to(pl_module.device)
                 elif prior_module.text_encoder.__class__.__name__ == 'SigLIP':
-                    description_dummy = "You did nothing to no object"
+                    description_dummy = "You adjusted the microwave's door"
                     tokenized = False
                 else:
                     raise NotImplementedError

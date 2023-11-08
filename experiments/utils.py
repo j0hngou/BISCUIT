@@ -64,6 +64,8 @@ def load_datasets(args):
         assert False, f'Unknown data class for {args.data_dir}'
     if hasattr(args, 'try_encodings'):
         dataset_args['try_encodings'] = args.try_encodings
+    if hasattr(args, 'debug_data'):
+        dataset_args['debug_data'] = args.debug_data
     train_dataset = DataClass(
         data_folder=args.data_dir, split='train', single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=args.subsample_percentage, **dataset_args)
     val_dataset = DataClass(

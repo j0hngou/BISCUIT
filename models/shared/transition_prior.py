@@ -159,11 +159,9 @@ class InteractionTransitionPrior(nn.Module):
             # If we add the previous state, it is better to initialize the weights
             # to put equal importance on actions and previous states, since the
             # previous state is usually much higher dimensional (e.g. 2/16 vs 40 in iTHOR)
-            # self.action_preprocess[1].weight.data[...,enc_dim:] *= np.sqrt(enc_dim / self.num_latents)
-            # self.action_preprocess[1].weight.data[...,:enc_dim] *= np.sqrt(self.num_latents / enc_dim)
             if self.text:
-                self.action_preprocess[0].weight.data[...,enc_dim:] *= np.sqrt(enc_dim_with_text / self.num_latents)
-                self.action_preprocess[0].weight.data[...,:enc_dim] *= np.sqrt(self.num_latents / enc_dim_with_text)
+                self.action_preprocess[0].weight.data[...,enc_dim_with_text:] *= np.sqrt(enc_dim_with_text / self.num_latents)
+                self.action_preprocess[0].weight.data[...,:enc_dim_with_text] *= np.sqrt(self.num_latents / enc_dim_with_text)
             else:
                 self.action_preprocess[1].weight.data[...,enc_dim:] *= np.sqrt(enc_dim / self.num_latents)
                 self.action_preprocess[1].weight.data[...,:enc_dim] *= np.sqrt(self.num_latents / enc_dim)
@@ -288,11 +286,14 @@ class InteractionTransitionPrior(nn.Module):
             with torch.no_grad():
                 text_embeddings = self.text_encoder(tokenized_description, tokenized=tokenized)
             text_embeddings = self.text_MLP(text_embeddings)
-            encoded_action = self.encoding_layer(action)
+            encoded_action = self.encoding_layer(action[...,None,:].expand(-1, self.num_latents, -1))
             if not tokenized:
                 text_embeddings = text_embeddings.repeat(encoded_action.shape[0], 1)
+            text_embeddings = text_embeddings[...,None,:].expand(-1, self.num_latents, -1)
             action = torch.cat([encoded_action, text_embeddings], dim=-1)
-        action = self.action_preprocess(action[...,None,:].expand(-1, self.num_latents, -1)).squeeze(dim=-1)
+            action = self.action_preprocess(action).squeeze(dim=-1)
+        else:
+            action = self.action_preprocess(action[...,None,:].expand(-1, self.num_latents, -1)).squeeze(dim=-1)
         if soft:
             action_idx = torch.tanh(action)
         else:
