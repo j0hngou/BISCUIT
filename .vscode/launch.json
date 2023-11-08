@@ -1,7 +1,4 @@
 {
-	// Use IntelliSense to learn about possible attributes.
-	// Hover to view descriptions of existing attributes.
-	// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
 	"version": "0.2.0",
 	"configurations": [
 		{
@@ -12,8 +9,27 @@
 			"console": "integratedTerminal",
 			"cwd": "${fileDirname}",
 			"justMyCode": true,
-			// cli args: --data_dir data --autoencoder_checkpoint pretrained_models/AE_iTHOR/AE_40l_64hid.ckpt
-			"args": ["--data_dir", "/home/john/Sync/BISCUIT/data/ithor_subsampled", "--autoencoder_checkpoint", "/home/john/Sync/BISCUIT/pretrained_models/AE_iTHOR/AE_40l_64hid.ckpt"]
+			"args": [
+				"--data_dir", "/home/john/PhD/BISCUIT/data/ithor",
+				"--autoencoder_checkpoint", "/home/john/PhD/BISCUIT/pretrained_models/AE_40l_64hid.ckpt",
+				"--num_latents", "40",
+				"--c_hid", "64",
+				"--num_flows", "6",
+				"--lr", "1e-3",
+				"--num_samples", "2",
+				"--batch_size", "1024",
+				"--seed", "42",
+				"--text",
+				"--lr_text", "1e-2",
+				"--text_encoder", "siglip",
+				"--subsample_percentage", "0.2",
+				"--max_epochs", "40",
+				"--seq_len", "2",
+				"--num_workers", "4",
+				// "--debug_data",
+				"--prior_action_add_prev_state"
+
+			]
 		}
 	]
 }

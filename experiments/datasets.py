@@ -591,6 +591,7 @@ class iTHORDataset(data.Dataset):
                  categorical_actions=False,
                  return_text=False,
                  subsample_percentage=1.0,
+                 debug_data=False,
                  **kwargs):
         super().__init__()
         self.cluster = cluster
@@ -616,7 +617,7 @@ class iTHORDataset(data.Dataset):
         self.categorical_actions = categorical_actions
         self.seq_len = seq_len if not (single_image or triplet) else 1
         self.return_text = return_text
-        self.subsample_percentage = subsample_percentage
+        self.subsample_percentage = subsample_percentage if not debug_data else 0.05
 
         # Loading data
         data = self.load_data_from_folder(data_split_folder)
@@ -704,8 +705,10 @@ class iTHORDataset(data.Dataset):
                 print(f'WARNING: Skipping {file} because of inconsistent latent size!')
                 continue
             data_seq_keys = sorted(list(data_seq.keys()))
-            if 'collected_descriptions' in data_seq_keys:
-                data_seq_keys.remove('collected_descriptions')
+            if any(['description' in key for key in data_seq_keys]):
+                data_seq_keys = [key for key in data_seq_keys if not 'description' in key]
+            # if 'collected_descriptions' in data_seq_keys:
+            #     data_seq_keys.remove('collected_descriptions')
             if self.try_encodings and os.path.isfile(file.replace('.npz', '_encodings.npz')):
                 data_seq_enc = np.load(file.replace('.npz', '_encodings.npz'), allow_pickle=True)
                 data_seq_keys.remove('frames')
