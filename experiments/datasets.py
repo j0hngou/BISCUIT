@@ -14,6 +14,7 @@ from glob import glob
 import sys
 sys.path.append('../')
 from data_generation.data_generation_ithor import create_targets
+from random import sample
 
 
 class VoronoiDataset(data.Dataset):
@@ -589,6 +590,7 @@ class iTHORDataset(data.Dataset):
                  try_encodings=False,
                  categorical_actions=False,
                  return_text=False,
+                 subsample_percentage=1.0,
                  **kwargs):
         super().__init__()
         self.cluster = cluster
@@ -614,6 +616,7 @@ class iTHORDataset(data.Dataset):
         self.categorical_actions = categorical_actions
         self.seq_len = seq_len if not (single_image or triplet) else 1
         self.return_text = return_text
+        self.subsample_percentage = subsample_percentage
 
         # Loading data
         data = self.load_data_from_folder(data_split_folder)
@@ -684,7 +687,11 @@ class iTHORDataset(data.Dataset):
 
     def load_data_from_folder(self, data_folder):
         data = {}
-        seq_files = sorted(glob(os.path.join(data_folder, '*seq_*.npz')))
+        all_seq_files = sorted(glob(os.path.join(data_folder, '*seq_*.npz')))
+        num_to_load = int(len(all_seq_files) * self.subsample_percentage)
+        # seq_files = sample(all_seq_files, num_to_load)  # randomly sample files
+        # seq_files = sorted(glob(os.path.join(data_folder, '*seq_*.npz')))
+        seq_files = all_seq_files[:num_to_load]
         seq_files = [f for f in seq_files if not f.endswith('_encodings.npz')]
         skipped = []
         for file_idx, file in enumerate(tqdm_track(seq_files, desc=f'Loading sequences of {self.split_name}', leave=False, cluster=self.cluster)):
@@ -836,7 +843,7 @@ class iTHORDataset(data.Dataset):
         if self.return_targets:
             returns += [target]
         if self.return_text:
-            returns += [self.input_ids[idx], self.token_type_ids[idx], self.attention_mask[idx]]
+            returns += [self.input_ids[idx + 1:idx+self.seq_len], self.token_type_ids[idx + 1:idx+self.seq_len], self.attention_mask[idx + 1:idx+self.seq_len]]
         if self.return_latents:
             returns += [lat]
 
