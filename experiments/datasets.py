@@ -591,6 +591,7 @@ class iTHORDataset(data.Dataset):
                  categorical_actions=False,
                  return_text=False,
                  subsample_percentage=1.0,
+                 subsample_chunk=0,
                  debug_data=False,
                  **kwargs):
         super().__init__()
@@ -618,7 +619,11 @@ class iTHORDataset(data.Dataset):
         self.seq_len = seq_len if not (single_image or triplet) else 1
         self.return_text = return_text
         self.subsample_percentage = subsample_percentage if not debug_data else 0.05
+        self.subsample_chunk = subsample_chunk if not debug_data else 0
 
+        if kwargs.get('perfect_interactions', False):
+            self.return_latents = True
+            self.return_targets = True
         # Loading data
         data = self.load_data_from_folder(data_split_folder)
         # Preparing images
@@ -690,9 +695,14 @@ class iTHORDataset(data.Dataset):
         data = {}
         all_seq_files = sorted(glob(os.path.join(data_folder, '*seq_*.npz')))
         num_to_load = int(len(all_seq_files) * self.subsample_percentage)
+        # Check if the subsample chunk is valid
+        if (self.subsample_chunk + 1) * num_to_load > len(all_seq_files):
+            print(f'WARNING: Subsample chunk {self.subsample_chunk} is too large and it overflows the dataset. Setting it to 0.')
+            self.subsample_chunk = 0
+        offset = self.subsample_chunk * num_to_load
         # seq_files = sample(all_seq_files, num_to_load)  # randomly sample files
         # seq_files = sorted(glob(os.path.join(data_folder, '*seq_*.npz')))
-        seq_files = all_seq_files[:num_to_load]
+        seq_files = all_seq_files[offset:offset+num_to_load]
         seq_files = [f for f in seq_files if not f.endswith('_encodings.npz')]
         skipped = []
         for file_idx, file in enumerate(tqdm_track(seq_files, desc=f'Loading sequences of {self.split_name}', leave=False, cluster=self.cluster)):
