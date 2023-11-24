@@ -9,6 +9,7 @@ from random import shuffle
 import random
 import numpy as np
 from matplotlib import pyplot as plt
+import matplotlib.patches as patches
 import imageio
 import os
 import torch
@@ -23,6 +24,8 @@ from scipy import signal
 RESOLUTION = 512  
 SIMPLE_SET = False
 OBJECT_NAMES = [
+    'Apple',
+    'Knife',
     'Stove',
     'Microwave',
     'Cabinet',
@@ -35,6 +38,8 @@ OBJECT_NAMES = [
     'Potato'
 ] if not SIMPLE_SET else [])
 MIN_DIST = 0.22
+GRID_STRIDE = MIN_DIST / 20
+DISTANCE_KNIFE_PLATE = 0.23
 
 NOT_MOVABLE = [
     'Window',
@@ -56,6 +61,18 @@ FIXED_POSITION_DICT = [
     }
 ]
 MOVABLE_POSITION_DICT = [
+    {
+        "objectName": "Knife",
+        "rotation": {
+            "x": 0, "y": 90, "z": 90
+        }
+    },
+    {
+        "objectName": "Apple",
+        "rotation": {
+            "x": 0, "y": 0, "z": 0
+        }
+    },
     {
         "objectName": "Egg",
         "rotation": {
@@ -93,6 +110,24 @@ COUNTER_POSITIONS = [
         "position": {
             "x": 0.65, "y": 0.98, "z": -0.55
         }
+    },
+    {
+        "objectName": None,
+        "position": {
+            "x": 1.00, "y": 0.98, "z": -0.81
+        }
+    },
+    # {
+    #     "objectName": None,
+    #     "position": {
+    #         "x": 1.03, "y": 0.98, "z": -0.55
+    #     }
+    # },
+    {
+        "objectName": None,
+        "position": {
+            "x": 0.68, "y": 0.98, "z": -0.81
+        }
     }
 ]
 CATEGORICAL_POSITION_DICT = [
@@ -102,13 +137,16 @@ CATEGORICAL_POSITION_DICT = [
             "x": 0, "y": 0, "z": 0
         },
         "position": [
-            {"x": 0.85, "y": 0.95, "z": -1.20}
+            {"x": 0.85, "y": 0.95, "z": -1.20},
+            # {"x": 1.08, "y": 0.95, "z": -1.10},
+            # {"x": 0.85, "y": 0.95, "z": -1.50},
+            # {"x": 1.08, "y": 0.98, "z": -1.50},
         ]
     }
 ]
 ACTIONS = {
     'PickupObject': [
-
+        'Apple', 'Knife'
     ] + (['Egg', 'Plate'] if not SIMPLE_SET else []),
     'PutObject': (['Pan'] if not SIMPLE_SET else [])  + 
     [
@@ -118,13 +156,14 @@ ACTIONS = {
         'Toaster', 'Microwave', 'StoveKnob_38c1dbc2', 'StoveKnob_690d0d5d', 'StoveKnob_c8955f66', 'StoveKnob_cf670576'
     ],
     'SliceObject': ([
-        'Potato'
+        # 'Potato', 'Apple'
+        'Apple',
     ] if not SIMPLE_SET else []),
     'OpenObject': [
         'Microwave', 'Cabinet_47fc321b'
     ],
     'NoOp': [
-        'NoObject1', 'NoObject2', 'NoObject3'
+        'NoObject1', 'NoObject2', 'NoObject3' # 'NoObject3', 'NoObject4'
     ]
 }
 INTERACT_OBJS = list(set([obj for action_key in ['PickupObject', 'ToggleObject', 'SliceObject', 'OpenObject']
@@ -155,7 +194,7 @@ def initialize_environment(seed:int=42):
     controller = Controller(width=RESOLUTION, 
                             height=RESOLUTION, 
                             gridSize=0.1, 
-                            platform=CloudRendering,
+                            # platform=CloudRendering,
                             renderInstanceSegmentation=True)
 
     # Move the agent to the starting position
@@ -234,6 +273,8 @@ def get_environment_state(event : dict):
         object_name = obj['name']
         if not obj['visible'] or not any([object_name.startswith(name) for name in INTERACT_OBJS]):
             continue
+        # if any([k in object_name for k in ['_Slice_', '_Sliced_', '_Cracked_']]):
+            # continue
         if obj['pickupable']:
             state[object_name + '_pickedup'] = int(obj['isPickedUp'])
             for key in obj['position']:
@@ -323,6 +364,191 @@ def get_action_pos(event : dict, objectId : str, action_type : str, randomize : 
         action_pos[i] = object_position[i] * 1. / instance_mask.shape[i]
     return action_pos
 
+# MOVE ACTION HELPERS
+def generate_possible_positions(min_x, max_x, min_z, max_z, stride):
+    x_positions = np.arange(min_x, max_x, stride)
+    z_positions = np.arange(min_z, max_z, stride)
+    positions = np.array(np.meshgrid(x_positions, z_positions)).T.reshape(-1, 2)
+    # Filter out the positions where the knife is too close to the plate
+    # plate_pos = None
+    # knife_pos = None
+    # for mov_pos in MOVABLE_POSITION_DICT:
+    #     if mov_pos['objectName'] == 'Knife':
+    #         if mov_pos['counter_position'] is None:
+    #             knife_pos = None
+    #         else:
+    #             knife_pos = mov_pos['counter_position']['position']['x'], mov_pos['counter_position']['position']['z']
+    #     elif mov_pos['objectName'] == 'Plate':
+    #         if mov_pos['counter_position'] is None:
+    #             plate_pos = None
+    #         else:
+    #             plate_pos = mov_pos['counter_position']['position']['x'], mov_pos['counter_position']['position']['z']
+    # if knife_pos is not None and plate_pos is not None:
+    #     distances = np.linalg.norm(positions - knife_pos, axis=1, ord=1)
+    #     positions = positions[np.where(distances > DISTANCE_KNIFE_PLATE)]
+    #     distances = np.linalg.norm(positions - plate_pos, axis=1, ord=1)
+    #     positions = positions[np.where(distances > DISTANCE_KNIFE_PLATE)]
+    return positions
+
+
+def is_position_valid(pos, existing_positions, min_dist, is_knife=False, is_plate=False):
+    distances = np.linalg.norm(existing_positions - pos, axis=1, ord=1)
+    # if is_knife or is_plate:
+    #     # knife_pos = MOVABLE_POSITION_DICT[0]['counter_position']['position']['x'], MOVABLE_POSITION_DICT[0]['counter_position']['position']['z']
+    #     # plate_pos = MOVABLE_POSITION_DICT[1]['counter_position']['position']['x'], MOVABLE_POSITION_DICT[1]['counter_position']['position']['z']
+    #     # Find the knife in the movable positions dict
+    #     knife_pos = None
+    #     plate_pos = None
+    #     for mov_pos in MOVABLE_POSITION_DICT:
+    #         if mov_pos['objectName'] == 'Knife':
+    #             if mov_pos['counter_position'] is None:
+    #                 knife_pos = None
+    #                 return np.all(distances > min_dist)
+    #             else:
+    #                 knife_pos = mov_pos['counter_position']['position']['x'], mov_pos['counter_position']['position']['z']
+    #         elif mov_pos['objectName'] == 'Plate':
+    #             if mov_pos['counter_position'] is None:
+    #                 plate_pos = None
+    #                 return np.all(distances > min_dist)
+    #             else:
+    #                 plate_pos = mov_pos['counter_position']['position']['x'], mov_pos['counter_position']['position']['z']
+        
+    #     if knife_pos is None and plate_pos is None:
+    #         return np.all(distances > min_dist)
+    #     if is_plate:
+    #         if np.abs(pos[0] - knife_pos[0]) < DISTANCE_KNIFE_PLATE \
+    #             and np.abs(pos[1] - knife_pos[1]) < DISTANCE_KNIFE_PLATE:
+    #             return False
+    #     elif is_knife:
+    #         if np.abs(pos[0] - plate_pos[0]) < DISTANCE_KNIFE_PLATE \
+    #             and np.abs(pos[1] - plate_pos[1]) < DISTANCE_KNIFE_PLATE:
+    #             return False
+
+    return np.all(distances > min_dist)
+        
+
+        
+
+    # if object_name.startswith('Knife') and 'Plate' in MOVABLE_POSITION_DICT[0]['counter_position']['objectName'] \
+    #     or object_name.startswith('Plate') and 'Knife' in MOVABLE_POSITION_DICT[0]['counter_position']['objectName']:
+    #     if np.abs(pos[0] - MOVABLE_POSITION_DICT[0]['counter_position']['position']['x']) < DISTANCE_KNIFE_PLATE \
+    #         and np.abs(pos[1] - MOVABLE_POSITION_DICT[0]['counter_position']['position']['z']) < DISTANCE_KNIFE_PLATE:
+    #         continue
+    
+
+# def predict_future_placement(current_pos, possible_positions, existing_positions, min_dist):
+#     """
+#     We want to make sure of two things:
+#     1. There is at least one position where we can place a new object
+#     2. There is at least one position where we can move an existing object
+#     Note that moving the existing objects is constrained by a box around the original position
+#     of the existing object. This is to prevent objects from being moved too far away from their
+#     original position.
+#     """
+#     # Check if we can place a new object
+#     future_placement_possible = False
+#     for future_pos in possible_positions:
+#         if not np.array_equal(future_pos, current_pos):
+#             # Check for placing a new object on the counter
+#             if is_position_valid(future_pos, existing_positions, min_dist):
+#                 future_placement_possible = True
+#             # Check if we can wiggle all of the existing objects around after placing the new object
+#             booleans = []
+#             if current_pos in existing_positions:
+#                 existing_positions = np.delete(existing_positions, np.where(np.all(existing_positions == current_pos, axis=1)), axis=0)
+#             else:
+#                 new_existing_positions = np.concatenate([existing_positions, [current_pos]])
+#             for pos in new_existing_positions:
+#                 # Create list of possible positions around original position
+#                 original_positions = pos[0], pos[1]
+#                 min_x, max_x = max(original_positions[0] - 0.2, 0.65), min(original_positions[0] + 0.2, 1.00)
+#                 min_z, max_z = max(original_positions[1] - 0.2, -0.81), min(original_positions[1] + 0.2, -0.35)
+#                 grid_stride = min_dist / 10
+#                 possible_positions_move = generate_possible_positions(min_x, max_x, min_z, max_z, grid_stride)
+#                 # Check if we can move the object to any of the possible positions
+#                 for future_pos in possible_positions_move:
+#                     if not np.array_equal(future_pos, original_positions):
+#                         booleans.append(is_position_valid(future_pos, new_existing_positions, min_dist))
+
+
+
+#     # booleans = []
+
+#     # for pos in existing_positions:
+#     #     # Create list of possible positions around original position
+#     #     original_positions = pos[0], pos[1]
+#     #     min_x, max_x = max(original_positions[0] - 0.2, 0.65), min(original_positions[0] + 0.2, 1.00)
+#     #     min_z, max_z = max(original_positions[1] - 0.2, -0.81), min(original_positions[1] + 0.2, -0.35)
+#     #     grid_stride = min_dist / 10
+#     #     possible_positions_move = generate_possible_positions(min_x, max_x, min_z, max_z, grid_stride)
+#     #     # Check if we can move the object to any of the possible positions
+#     #     for future_pos in possible_positions_move:
+#     #         if not np.array_equal(future_pos, original_positions):
+#     #             booleans.append(is_position_valid(future_pos, existing_positions, min_dist))
+    
+#     future_placement_possible = future_placement_possible and np.all(booleans)        
+
+def check_future_placement(state, movement_distance):
+    """
+    Use the current state to predict whether we can place a new object and move an existing object
+    state: passed as a numpy array of shape (num_objects, positions)
+    Check whether we can 
+    a) place a new object:
+    b) move all existing object
+    c) The knife is far enough away from the plate
+    """
+    future_placement_possible = False
+    future_movement_possible = False
+    knife_away_from_plate = False
+    # If all objects are on the counter, we don't care about future placement
+    # The MovablePositionDict contains all the objects that can be moved and
+    # if the counter_position is None, then the object is not on the counter
+    num_objects_on_counter = sum([pos['counter_position'] is not None for pos in MOVABLE_POSITION_DICT])
+    if num_objects_on_counter == len(MOVABLE_POSITION_DICT):
+        future_placement_possible = True
+    else:
+        # Check if we can place a new object
+        possible_positions = generate_possible_positions(0.65, 1.00, -0.81, -0.35, GRID_STRIDE)
+        for future_pos in possible_positions:
+            if is_position_valid(future_pos, state, MIN_DIST):
+                future_placement_possible = True
+                break
+    
+    # Check if we can move all of the existing objects
+    booleans = [False for _ in range(len(state))]
+    for i, pos in enumerate(state):
+        # Create list of possible positions around original position
+        min_x, max_x = max(pos[0] - 0.2, 0.65), min(pos[0] + 0.2, 1.00)
+        min_z, max_z = max(pos[1] - 0.2, -0.81), min(pos[1] + 0.2, -0.35)
+        possible_positions_move = generate_possible_positions(min_x, max_x, min_z, max_z, GRID_STRIDE)
+        # Check if we can move the object to any of the possible positions
+        for future_pos in possible_positions_move:
+            if not np.array_equal(future_pos, pos):
+                if is_position_valid(future_pos, state, movement_distance):
+                    booleans[i] = True
+                    break
+        future_movement_possible = np.all(booleans)
+        if future_movement_possible:
+            break
+
+    
+    return future_placement_possible and future_movement_possible
+    
+
+def plot_possible_positions_on_frame(frame, possible_positions, existing_positions):
+
+    fig, ax = plt.subplots()
+    frame = frame.copy()
+    possible_positions_proj = ((possible_positions + 1.0) / 2.0 * 512).astype(np.int32)
+    existing_positions_proj = ((existing_positions + 1.0) / 2.0 * 512).astype(np.int32)
+    frame[possible_positions_proj[:, 0], possible_positions_proj[:, 1]] = [0, 255, 0]
+    rects = [patches.Rectangle((pos[1] - 5, pos[0] - 5), 10, 10, linewidth=1, edgecolor='r', facecolor='none') for pos in existing_positions_proj]
+    for rect in rects:
+        ax.add_patch(rect)
+    # frame[existing_positions_proj[:, 0], existing_positions_proj[:, 1]] = [255, 0, 0]
+    plt.imshow(frame)
+
+    plt.show()
 
 def perform_action(controller : Controller, action_type : str, object_name : str, event : dict, step_number : int = -1):
     print((f"[{step_number:3d}] " if step_number >= 0 else "") + f"Performing action {action_type} on {object_name}")
@@ -369,32 +595,78 @@ def perform_action(controller : Controller, action_type : str, object_name : str
             elif object_name.startswith('Microwave'):
                 pass
         elif action_type == 'MoveObject':
+            is_knife, is_plate = object_name.startswith('Knife'), object_name.startswith('Plate')
             orig_pos = None
             for mov_pos in MOVABLE_POSITION_DICT:
                 if object_name.startswith(mov_pos['objectName']):
                     orig_pos = mov_pos
                     break
-            pos_found = False
-            while not pos_found:
-                pos_found = True
-                if orig_pos['counter_position'] is not None:
-                    x = orig_pos['counter_position']['position']['x'] + np.random.rand() * 0.2
-                    x = np.clip(x, 0.65, 1.00)
-                    z = orig_pos['counter_position']['position']['z'] + np.random.rand() * 0.2
-                    z = np.clip(z, -0.81, -0.35)
+            total_objects = len(MOVABLE_POSITION_DICT)
+
+            # Move from counter to counter
+            if orig_pos['counter_position'] is not None:
+
+                original_positions = orig_pos['counter_position']['position']['x'], orig_pos['counter_position']['position']['z']
+                # Create list of possible positions around original position
+                counter_min_x, counter_max_x = max(original_positions[0] - 0.2, 0.65), min(original_positions[0] + 0.2, 1.00)
+                counter_min_z, counter_max_z = max(original_positions[1] - 0.2, -0.81), min(original_positions[1] + 0.2, -0.35)
+                possible_positions = generate_possible_positions(counter_min_x, counter_max_x, counter_min_z, counter_max_z, GRID_STRIDE)
+                existing_positions = [pos['counter_position']['position'] 
+                                            for pos in MOVABLE_POSITION_DICT 
+                                            if pos['counter_position'] is not None]
+                existing_positions = np.array([list(pos.values()) for pos in existing_positions])
+                existing_positions = existing_positions[:, [0, 2]]
+                valid_positions = []
+                for pos in possible_positions:
+                    # Check if knife is far enough away from plate
+                    if is_position_valid(pos, existing_positions, MIN_DIST, is_knife, is_plate):
+                        # Predictive analysis for future placement
+                        # We moved an object from the counter to the counter, so we need to check
+                        # at this new state whether we can place a new object and move an existing object
+                        existing_positions_without_current = np.delete(existing_positions, np.where(np.all(existing_positions == original_positions, axis=1)), axis=0)
+                        new_state = np.concatenate([existing_positions_without_current, [pos]])
+                        if check_future_placement(new_state, 0.23):
+                            valid_positions.append(pos)
+
+                # plot_possible_positions_on_frame(event.frame, possible_positions, existing_positions)
+                if len(valid_positions) > 0:
+                    x, z = valid_positions[np.random.randint(0, len(valid_positions))]
                 else:
-                    x = np.random.uniform(0.65, 1.00)
-                    z = np.random.uniform(-0.35, -0.81)
-                for mov_pos in MOVABLE_POSITION_DICT:
-                    if not object_name.startswith(mov_pos['objectName']):
-                        if mov_pos['counter_position'] is None:
-                            continue
-                        else:
-                            if abs(x - mov_pos['counter_position']['position']['x']) < MIN_DIST and \
-                                    abs(z - mov_pos['counter_position']['position']['z']) < MIN_DIST:
-                                pos_found = False
-                                break
-            
+                    print('No valid positions found')
+                    raise Exception('No valid positions found')
+            else: # Move from hand to counter
+
+                # Generate list of possible positions
+                counter_min_x, counter_max_x = 0.65, 1.00
+                counter_min_z, counter_max_z = -0.81, -0.35
+                possible_positions = generate_possible_positions(counter_min_x, counter_max_x, counter_min_z, counter_max_z, GRID_STRIDE)
+
+                # Get existing positions from MOVABLE_POSITION_DICT
+                existing_positions = [pos['counter_position']['position'] 
+                                            for pos in MOVABLE_POSITION_DICT 
+                                            if pos['counter_position'] is not None]
+                existing_positions = np.array([list(pos.values()) for pos in existing_positions])
+                # Throw away y coordinate
+                existing_positions = existing_positions[:, [0, 2]]
+
+                # Filter valid positions
+                valid_positions = []
+                for pos in possible_positions:
+                    if is_position_valid(pos, existing_positions, MIN_DIST, is_knife, is_plate):
+                        # Predictive analysis for future placement
+                        # We moved an object from the hand to the counter, so we need to check
+                        # at this new state whether we can place a new object and move an existing object
+                        new_state = np.concatenate([existing_positions, [pos]])
+                        if check_future_placement(new_state, 0.2):
+                            valid_positions.append(pos)
+
+                if len(valid_positions) > 0:
+                    x, z = valid_positions[np.random.randint(0, len(valid_positions))]
+                else:
+                    print('No valid positions found')
+                    raise Exception('No valid positions found')
+                    # return event, None
+
             for mov_pos in MOVABLE_POSITION_DICT:
                 if object_name.startswith(mov_pos['objectName']):
                     mov_pos['counter_position'] = {'position': {'x': x, 'y': 0.98, 'z': z}, 'objectName': object_name}
@@ -512,7 +784,7 @@ def perform_random_action(controller : Controller, last_step : dict):
     }
     return new_step
 
-def create_targets(debug_info : dict, causal_keys : list):
+def create_targets(debug_info : dict, causal_keys : list, latents: np.ndarray):
     targets = np.zeros((len(debug_info['action_type']) + 1, len(causal_keys)), dtype=np.uint8)
     for i in range(len(debug_info['action_type'])):
         object_name = debug_info['object_name'][i]
@@ -533,6 +805,16 @@ def create_targets(debug_info : dict, causal_keys : list):
                 if action_type == 'SliceObject' and not key.endswith('_sliced'):
                     continue
                 targets[i + 1, j] = 1
+    # Fix egg broken and egg cooked based on latents
+    egg_broken_idx = causal_keys.index('Egg_afaaaca3_broken')
+    egg_cooked_idx = causal_keys.index('Egg_afaaaca3_cooked')
+    egg_broken_ = latents[:, egg_broken_idx].argmax()
+    egg_cooked_ = latents[:, egg_cooked_idx].argmax()
+    targets[:, egg_broken_idx] = 0
+    targets[:, egg_cooked_idx] = 0
+    targets[egg_broken_, egg_broken_idx] = 1 if egg_broken_ > 0 else 0
+    targets[egg_cooked_, egg_cooked_idx] = 1 if egg_cooked_ > 0 else 0
+
     return targets
 
 def simplify_latents(latents : np.ndarray, causal_keys : list):
@@ -660,7 +942,7 @@ def generate_sequence(seed : int, output_folder : str, num_frames : int = 200, p
     causal_keys = sorted(list(collected_states.keys()))
     latents = np.stack([collected_states[key] for key in causal_keys], axis=1)
     latents, causal_keys = simplify_latents(latents, causal_keys)
-    targets = create_targets(debug_info, causal_keys)
+    targets = create_targets(debug_info, causal_keys, latents)
     np.savez_compressed(os.path.join(output_folder, f'{prefix}seq_{str(seed).zfill(6)}.npz'), 
                         frames=collected_frames.transpose(0, 3, 1, 2), 
                         actions=collected_actions, 
@@ -689,16 +971,16 @@ def print_time(time : float):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_folder', type=str, default='/scratch-shared/gkounto/biscuit/data/ithor/')
+    parser.add_argument('--output_folder', type=str, default='/home/john/PhD/BISCUIT/data/ithor_extended')
     parser.add_argument('--num_frames', type=int, default=100)
-    parser.add_argument('--num_sequences', type=int, default=300)
+    parser.add_argument('--num_sequences', type=int, default=1500)
     parser.add_argument('--prefix', type=str, default='train')    
     parser.add_argument('--overwrite', action='store_true', default=False)
     parser.add_argument('--save_segmentations', action='store_true', default=False)
     parser.add_argument('--randomize_materials', action='store_true', default=False)
     parser.add_argument('--randomize_colors', action='store_true', default=False)
     parser.add_argument('--randomize_lighting', action='store_true', default=False)
-    args = parser.parse_args()
+    args = parser.parse_args([])
 
     output_folder = args.output_folder
     num_frames = args.num_frames
@@ -708,6 +990,7 @@ if __name__ == '__main__':
     save_segmentations = args.save_segmentations
     randomize_materials = args.randomize_materials
     randomize_colors = args.randomize_colors
+    randomize_lighting = args.randomize_lighting
     output_folder = os.path.join(output_folder, prefix)
     hash = sha256(prefix.encode())
     offset_seed = np.frombuffer(hash.digest(), dtype='uint32')[0]
@@ -734,7 +1017,7 @@ if __name__ == '__main__':
                                                                                   prefix=f'{prefix}_',
                                                                                   randomize_materials=randomize_materials,
                                                                                   randomize_colors=randomize_colors,
-                                                                                  randomize_lighting=True)
+                                                                                  randomize_lighting=randomize_lighting)
         if seq_idx == 1 and prefix == 'train':
             collected_frames = [frame for frame in collected_frames]
             exmp_folder = os.path.join(output_folder, f'{prefix}_seq_{str(seq_idx).zfill(6)}')
