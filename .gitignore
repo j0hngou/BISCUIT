@@ -145,3 +145,6 @@ demo_data/
 # SLURM
 *.out
 *.err
+
+# VSCode
+.vscode/
