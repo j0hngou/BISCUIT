@@ -67,7 +67,7 @@ def translate_action_sequence(action_sequence):
         "PickupObject": "picked up",
         "PutObject": "carefully placed",
         "MoveObject": "skillfully moved",
-        "SliceObject": "expertly sliced"  # New action
+        "SliceObject": "expertly sliced"
     }
 
     base_object_translations = {
@@ -86,7 +86,6 @@ def translate_action_sequence(action_sequence):
         "Egg": "the spherical, brown, fragile Egg",
         "Pan": "the flat, metal, sturdy Pan",
         "CounterTop_f8092513": "the granite countertop",
-        # New object translations
         "Apple": "the round, red, juicy Apple",
         "Knife": "the sharp, metallic Knife"
     }
@@ -174,8 +173,9 @@ if __name__ == '__main__':
     # tokenizer = transformers.BertTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
     tokenizer = get_tokenizer('hf-hub:timm/ViT-B-16-SigLIP')
 
-    path = '/scratch-shared/gkounto/biscuit/data/ithor'
-    process_dataset(path=path + '/train', tokenizer=tokenizer)
+
+    path = '/scratch-shared/gkounto/biscuit/data/ithor_extended'
+    process_dataset(path=path + '/final_train', tokenizer=tokenizer)
     process_dataset(path=path + '/val', tokenizer=tokenizer)
     process_dataset(path=path + '/val_indep', tokenizer=tokenizer)
     process_dataset(path=path + '/test', tokenizer=tokenizer)

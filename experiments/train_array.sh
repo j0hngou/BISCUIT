@@ -1,10 +1,10 @@
 #!/bin/bash
 
-#SBATCH --job-name=QER
+#SBATCH --job-name=trainNF
 #SBATCH -p gpu  # Partition to submit to
-#SBATCH -t 0-23:00         # Runtime in D-HH:MM, minimum of 10 minutes
-#SBATCH -c 8              # Number of cores (-c)
-#SBATCH --array=1-4
+#SBATCH -t 0-16:00         # Runtime in D-HH:MM, minimum of 10 minutes
+#SBATCH -c 18              # Number of cores (-c)
+#SBATCH --array=1-2
 #SBATCH --gres=gpu:1                # Number of cores (-c)
 #SBATCH --mem=120000           # Memory pool for all cores (see also --mem-per-cpu)
 #SBATCH --ntasks=1

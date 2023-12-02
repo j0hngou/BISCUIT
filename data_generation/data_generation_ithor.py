@@ -194,7 +194,7 @@ def initialize_environment(seed:int=42):
     controller = Controller(width=RESOLUTION, 
                             height=RESOLUTION, 
                             gridSize=0.1, 
-                            # platform=CloudRendering,
+                            platform=CloudRendering,
                             renderInstanceSegmentation=True)
 
     # Move the agent to the starting position
@@ -971,7 +971,7 @@ def print_time(time : float):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_folder', type=str, default='/home/john/PhD/BISCUIT/data/ithor_extended')
+    parser.add_argument('--output_folder', type=str, default='/scratch-shared/gkounto/biscuit/data/ithor_eggfix/')
     parser.add_argument('--num_frames', type=int, default=100)
     parser.add_argument('--num_sequences', type=int, default=1500)
     parser.add_argument('--prefix', type=str, default='train')    
