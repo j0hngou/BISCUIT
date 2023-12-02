@@ -554,14 +554,19 @@ class iTHORDataset(data.Dataset):
         'PickupObject',
         'PutObject',
         'MoveObject',
+        'SliceObject',
         'NoOp'
     ]
     OBJECT_NAMES = [
+        'Apple',
+        'Knife',
         'Cabinet_47fc321b',
         'CounterTop_f8092513',
         'Egg',
         'Egg_Cooked',  # Becomes independent of the previous time step
         'Egg_to_CounterTop_f8092513',
+        'Apple_to_CounterTop_f8092513',
+        'Knife_to_CounterTop_f8092513',
         'Egg_to_Pan',
         'Microwave',
         'Plate',
