@@ -190,10 +190,9 @@ class InteractionTransitionPrior(nn.Module):
                          Whether to detach the weights of the prior network.
                          Not strictly used anymore, but can be useful for debugging.
         """
-        action_feats, extra_info = self._get_action_feats( 
+        action_feats, extra_info = self._get_action_feats(action, 
                 z_t=z_t.reshape(action.shape[0], -1, z_t.shape[-1])[:,0], 
                 detach_weights=detach_weights,
-                action=action,
                 tokenized_description=tokenized_description,
                 **kwargs)
         
@@ -246,7 +245,9 @@ class InteractionTransitionPrior(nn.Module):
                 text_embeddings = self.text_encoder(tokenized_description, tokenized=True)
             text_embeddings = self.text_MLP(text_embeddings)
             text_embeddings = text_embeddings.unsqueeze(dim=1).expand(-1, self.num_latents, -1)
-            action = text_embeddings
+            encoded_action = self.encoding_layer(action)
+            action = torch.cat([encoded_action, text_embeddings], dim=-1)
+
         action = self.action_preprocess(action, detach_weights=detach_weights)
         abs_logits = torch.abs(action)
         action_logits = action
