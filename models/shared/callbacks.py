@@ -397,10 +397,18 @@ class CorrelationMetricsLogCallback(pl.Callback):
                 wandb.log({f'corr_callback_{tag}_max_off_diag{self.log_postfix}': max_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
 
         if isinstance(self.dataset, iTHORDataset):
-            if values.shape[1] == 18 and values.shape[0] == 10:
+            if (values.shape[1] == 18 or values.shape[1] == 27) and values.shape[0] == 10:
                 tvalues = torch.from_numpy(values)
-                tvalues = torch.cat([tvalues[:, :1], tvalues[:, 1:7].mean(dim=-1, keepdims=True),
-                        tvalues[:, 7:9], tvalues[:,9:13].mean(dim=-1, keepdims=True), tvalues[:,13:]], dim=-1).abs()
+                if values.shape[1] == 18:
+                    tvalues = torch.cat([tvalues[:, :1], tvalues[:, 1:7].mean(dim=-1, keepdims=True),
+                            tvalues[:, 7:9], tvalues[:,9:13].mean(dim=-1, keepdims=True), tvalues[:,13:]], dim=-1).abs()
+                elif values.shape[1] == 27:
+                    tvalues = torch.cat(
+                        [tvalues[:, :5].mean(dim=-1, keepdims=True),
+                        tvalues[:, 5:6], tvalues[:, 6:12].mean(dim=-1, keepdims=True),
+                        tvalues[:, 12:16].mean(dim=-1, keepdims=True),
+                        tvalues[:, 16:18], tvalues[:, 18:22].mean(dim=-1, keepdims=True),
+                        tvalues[:, 22:]], dim=-1).abs()
                 row_ind, col_ind = linear_sum_assignment(tvalues, maximize=True)
                 permuted_tvalues = tvalues[:, col_ind]
                 permuted_tvalues = permuted_tvalues[row_ind, :]
@@ -454,11 +462,20 @@ class PermutationCorrelationMetricsLogCallback(CorrelationMetricsLogCallback):
         ta = F.one_hot(max_r2, num_classes=r2_matrix.shape[-1]).float()
         # Group multi-dimensional causal variables together
         if isinstance(self.dataset, iTHORDataset):
-            ta = torch.cat([ta[:,:1],
-                            ta[:,1:7].sum(dim=-1, keepdims=True),
-                            ta[:,7:9],
-                            ta[:,9:13].sum(dim=-1, keepdims=True),
-                            ta[:,13:]], dim=-1)
+            if r2_matrix.shape[1] == 18:
+                ta = torch.cat([ta[:,:1],
+                                ta[:,1:7].sum(dim=-1, keepdims=True),
+                                ta[:,7:9],
+                                ta[:,9:13].sum(dim=-1, keepdims=True),
+                                ta[:,13:]], dim=-1)
+            elif r2_matrix.shape[1] == 27:
+                ta = torch.cat([ta[:,:5].sum(dim=-1, keepdims=True),
+                                ta[:,5:6],
+                                ta[:,6:12].sum(dim=-1, keepdims=True),
+                                ta[:,12:16].sum(dim=-1, keepdims=True),
+                                ta[:,16:18],
+                                ta[:,18:22].sum(dim=-1, keepdims=True),
+                                ta[:,22:]], dim=-1)
         elif isinstance(self.dataset, CausalWorldDataset):
             ta = torch.cat([ta[:,:6],
                             ta[:,6:].sum(dim=-1, keepdims=True)], dim=-1)

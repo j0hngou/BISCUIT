@@ -66,6 +66,8 @@ def load_datasets(args):
         dataset_args['try_encodings'] = args.try_encodings
     if hasattr(args, 'debug_data'):
         dataset_args['debug_data'] = args.debug_data
+    if hasattr(args, 'subsample_chunk'):
+        dataset_args['subsample_chunk'] = args.subsample_chunk
     train_dataset = DataClass(
         data_folder=args.data_dir, split='train', single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=args.subsample_percentage, **dataset_args)
     val_dataset = DataClass(
