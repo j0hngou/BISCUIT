@@ -499,7 +499,7 @@ def check_future_placement(state, movement_distance):
     """
     future_placement_possible = False
     future_movement_possible = False
-    knife_away_from_plate = False
+    # knife_away_from_plate = False
     # If all objects are on the counter, we don't care about future placement
     # The MovablePositionDict contains all the objects that can be moved and
     # if the counter_position is None, then the object is not on the counter
@@ -625,7 +625,7 @@ def perform_action(controller : Controller, action_type : str, object_name : str
                         # at this new state whether we can place a new object and move an existing object
                         existing_positions_without_current = np.delete(existing_positions, np.where(np.all(existing_positions == original_positions, axis=1)), axis=0)
                         new_state = np.concatenate([existing_positions_without_current, [pos]])
-                        if check_future_placement(new_state, 0.23):
+                        if check_future_placement(new_state, MIN_DIST):
                             valid_positions.append(pos)
 
                 # plot_possible_positions_on_frame(event.frame, possible_positions, existing_positions)
