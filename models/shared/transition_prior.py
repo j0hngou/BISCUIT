@@ -177,7 +177,7 @@ class InteractionTransitionPrior(nn.Module):
     def requires_prev_state(self):
         return self.add_prev_state
 
-    def _get_prior_params(self, z_t, action, tokenized_description=None, detach_weights=False, **kwargs):
+    def _get_prior_params(self, z_t, tokenized_description=None, detach_weights=False, **kwargs):
         """
         Abstracting the execution of the networks for estimating the prior parameters.
 
@@ -190,7 +190,7 @@ class InteractionTransitionPrior(nn.Module):
                          Whether to detach the weights of the prior network.
                          Not strictly used anymore, but can be useful for debugging.
         """
-        action_feats, extra_info = self._get_action_feats(action, 
+        action_feats, extra_info = self._get_action_feats( 
                 z_t=z_t.reshape(action.shape[0], -1, z_t.shape[-1])[:,0], 
                 detach_weights=detach_weights,
                 tokenized_description=tokenized_description,
@@ -215,7 +215,7 @@ class InteractionTransitionPrior(nn.Module):
         prior_params = [p.flatten(-2, -1) for p in prior_params]
         return prior_params, extra_info
 
-    def _get_action_feats(self, action, tokenized_description=None, temp_factor=1.0, z_t=None, detach_weights=False, **kwargs):
+    def _get_action_feats(self, tokenized_description=None, temp_factor=1.0, z_t=None, detach_weights=False, **kwargs):
         """
         Determining the interaction variables from the action and previous time step.
 
@@ -245,9 +245,7 @@ class InteractionTransitionPrior(nn.Module):
                 text_embeddings = self.text_encoder(tokenized_description, tokenized=True)
             text_embeddings = self.text_MLP(text_embeddings)
             text_embeddings = text_embeddings.unsqueeze(dim=1).expand(-1, self.num_latents, -1)
-            encoded_action = self.encoding_layer(action)
-            action = torch.cat([encoded_action, text_embeddings], dim=-1)
-
+            action = text_embeddings
         action = self.action_preprocess(action, detach_weights=detach_weights)
         abs_logits = torch.abs(action)
         action_logits = action
@@ -308,7 +306,7 @@ class InteractionTransitionPrior(nn.Module):
                                      z_t1_logstd=z_t1_logstd,
                                      z_t1_mean=z_t1_mean)
 
-    def sample_based_nll(self, z_t, z_t1, action, tokenized_description=None, use_KLD=False, z_t1_logstd=None, z_t1_mean=None):
+    def sample_based_nll(self, z_t, z_t1, tokenized_description=None, use_KLD=False, z_t1_logstd=None, z_t1_mean=None):
         """
         Calculate the negative log likelihood of p(z^t1|z^t,I^t+1) in BISCUIT.
         For the NF, we cannot make use of the KL divergence since the normalizing flow 
@@ -329,14 +327,11 @@ class InteractionTransitionPrior(nn.Module):
         """
         batch_size, num_samples, _ = z_t.shape
 
-        if len(action.shape) == 3:
-            action = action.flatten(0, 1)
         
         extra_params = self._prepare_prior_input()
 
         # Obtain estimated prior parameters for p(z^t1|z^t,I^t+1)
         prior_params, extra_info = self._get_prior_params(z_t.flatten(0, 1), 
-                                                          action=action,
                                                           tokenized_description=tokenized_description,
                                                           **extra_params)
 

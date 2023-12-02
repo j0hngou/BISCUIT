@@ -66,10 +66,12 @@ def translate_action_sequence(action_sequence):
         "ToggleObject": "toggled",
         "PickupObject": "picked up",
         "PutObject": "carefully placed",
-        "MoveObject": "skillfully moved"
+        "MoveObject": "skillfully moved",
+        "SliceObject": "expertly sliced"  # New action
     }
 
     base_object_translations = {
+        # Existing object translations
         "NoObject1": "no particular object",
         "NoObject2": "no particular object",
         "NoObject3": "no particular object",
@@ -83,11 +85,13 @@ def translate_action_sequence(action_sequence):
         "Plate": "the ceramic plate",
         "Egg": "the spherical, brown, fragile Egg",
         "Pan": "the flat, metal, sturdy Pan",
-        "CounterTop_f8092513": "the granite countertop"
+        "CounterTop_f8092513": "the granite countertop",
+        # New object translations
+        "Apple": "the round, red, juicy Apple",
+        "Knife": "the sharp, metallic Knife"
     }
 
     holding_object = None
-
     human_readable_sequence = []
 
     for action_command in action_sequence:
@@ -98,14 +102,10 @@ def translate_action_sequence(action_sequence):
         translated_action = action_translations.get(action, "did something with")
         translated_object = base_object_translations.get(obj, "an unknown object")
 
-        # Modify the object description based on the action
-        if obj == "Microwave":
-            if action == "OpenObject":
-                translated_object = "the microwave's door"
-            elif action == "ToggleObject":
-                translated_object = "the microwave's heating element"
-
-        if action == "PutObject" and holding_object is not None:
+        # Additional modifications for new objects or actions
+        if action == "SliceObject" and holding_object == "the sharp, metallic Knife":
+            description = f"You {translated_action} {translated_object} with {holding_object}"
+        elif action == "PutObject" and holding_object is not None:
             description = f"You {translated_action} {holding_object} on {translated_object}"
         else:
             description = f"You {translated_action} {translated_object}"
@@ -114,10 +114,11 @@ def translate_action_sequence(action_sequence):
 
         if action == "PickupObject":
             holding_object = translated_object
-        elif action in ["PutObject"]:
+        elif action in ["PutObject", "SliceObject"]:
             holding_object = None
 
     return human_readable_sequence
+
 
 def tokenize_action_sequence(action_sequence, tokenizer):
     tokenized_sequence = []
