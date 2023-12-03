@@ -37,11 +37,7 @@ class InteractionTransitionPrior(nn.Module):
         num_latents : int
                       Number of latents in the model
         c_hid : int
-                Hidden dimensionality of the networks
-        action_size : int, default -1
-                      Dimensionality of the action/regime variable
-        logit_reg_factor : float, default 0.004
-                           Regularization factor for the logits of the action variable
+                Hidden dimensionality of the ext_embeddingsor for the logits of the action variable
         temp_schedule : list of tuples, default [(1.0, 0), (2.5, 50000), (5.0, 100000)]
                         Schedule for the temperature factor of the Tanh activation function
                         of the interaction variable. The first value of each tuple is the
@@ -108,10 +104,17 @@ class InteractionTransitionPrior(nn.Module):
             for param in self.text_encoder.parameters():
                 param.requires_grad = False
 
-            self.text_MLP = TextMLP(text_proj_dim, c_hid // 4,
-                                hidden_dim=c_hid // 2,
-                                num_layers=2,
-                                non_linearity=nn.SiLU())
+            # self.text_MLP = TextMLP(text_proj_dim, c_hid // 4,
+            #                     hidden_dim=c_hid // 2,
+            #                     num_layers=2,
+            #                     non_linearity=nn.SiLU())
+            self.text_MLP = MultivarSequential(
+                MultivarLinear(text_proj_dim, c_hid // 2, [self.num_latents]),
+                nn.SiLU(),
+                MultivarLinear(c_hid // 2, c_hid // 2, [self.num_latents]),
+                nn.SiLU(),
+                MultivarLinear(c_hid // 2, c_hid // 4, [self.num_latents]),
+            )
 
         # Action preprocessing network, i.e. the MLP for interaction variable prediction.
         if self.action_size == 2:
@@ -244,7 +247,7 @@ class InteractionTransitionPrior(nn.Module):
             with torch.no_grad():
                 text_embeddings = self.text_encoder(tokenized_description, tokenized=True)
             text_embeddings = self.text_MLP(text_embeddings)
-            text_embeddings = text_embeddings.unsqueeze(dim=1).expand(-1, self.num_latents, -1)
+            # text_embeddings = text_embeddings.unsqueeze(dim=1).expand(-1, self.num_latents, -1)
             encoded_action = self.encoding_layer(action)
             action = torch.cat([encoded_action, text_embeddings], dim=-1)
 
@@ -288,8 +291,8 @@ class InteractionTransitionPrior(nn.Module):
             text_embeddings = self.text_MLP(text_embeddings)
             encoded_action = self.encoding_layer(action[...,None,:].expand(-1, self.num_latents, -1))
             if not tokenized:
-                text_embeddings = text_embeddings.repeat(encoded_action.shape[0], 1)
-            text_embeddings = text_embeddings[...,None,:].expand(-1, self.num_latents, -1)
+                text_embeddings = text_embeddings.repeat(encoded_action.shape[0], 1, 1)
+            # text_embeddings = text_embeddings[...,None,:].expand(-1, self.num_latents, -1)
             action = torch.cat([encoded_action, text_embeddings], dim=-1)
             action = self.action_preprocess(action).squeeze(dim=-1)
         else:
