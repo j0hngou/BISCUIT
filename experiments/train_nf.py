@@ -56,11 +56,12 @@ if __name__ == '__main__':
     parser.add_argument('--logit_reg_factor', type=float, default=0.004)
     parser.add_argument('--text', default=False, action="store_true")
     parser.add_argument('--lr_text', type=float, default=1e-4, help='Learning rate for text model')
-    parser.add_argument('--wandb', default=True, action="store_true")
+    parser.add_argument('--wandb', default=False, action="store_true")
     parser.add_argument('--text_encoder', type=str, default='sentence_transformer', help='Which text encoder to use')
     parser.add_argument('--subsample_percentage', type=float, default=1.0)
     parser.add_argument('--subsample_chunk', type=int, default=0)
     parser.add_argument('--debug_data', default=False, action="store_true")
+    parser.add_argument('--pass_intv_ground_truth', default=False, action="store_true")
 
 
     args = parser.parse_args()

@@ -559,7 +559,7 @@ class InteractionVisualizationCallback(pl.Callback):
             if prior_module.requires_prev_state():
                 img_inp = img_inp.to(pl_module.device)
                 prev_state = pl_module.encode(img_inp[:,0])
-            pred_intv = prior_module.get_interaction_quantization(action_inp, prev_state=prev_state, tokenized_description=tokenized_description if prior_module.text else None)
+            pred_intv = prior_module.get_interaction_quantization(action_inp, prev_state=prev_state, tokenized_description=tokenized_description if prior_module.text else None, targets=true_intv)
             all_pred_intvs.append(pred_intv)
 
         true_intv = torch.cat(all_true_intvs, dim=0).long()

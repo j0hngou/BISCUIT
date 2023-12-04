@@ -51,6 +51,7 @@ class BISCUITNF(BISCUITVAE):
         kwargs['no_encoder_decoder'] = True  # We do not need any additional en- or decoder
         super().__init__(*args, **kwargs)
         self.text = kwargs.get('text', False)
+        self.pass_intv_ground_truth = kwargs.get('pass_intv_ground_truth', False)
         # Initialize the flow
         self.flow = AutoregNormalizingFlow(self.hparams.num_latents, 
                                            self.hparams.num_flows,
@@ -79,8 +80,12 @@ class BISCUITNF(BISCUITVAE):
         """ Main training method for calculating the loss """
         if len(batch) == 2:
             x_enc, action = batch
+        elif len(batch) == 3:
+            x_enc, action, targets = batch
         elif len(batch) == 5:
             x_enc, action, input_ids, token_type_ids, attention_mask = batch
+        elif len(batch) == 6:
+            x_enc, action, targets, input_ids, token_type_ids, attention_mask = batch
         else:
             x_enc, _, action = batch
         with torch.no_grad():
@@ -102,7 +107,9 @@ class BISCUITNF(BISCUITVAE):
         nll = self.prior_t1.sample_based_nll(z_t=z_sample[:,:-1].flatten(0, 1),
                                              z_t1=z_sample[:,1:].flatten(0, 1),
                                              tokenized_description=tokenized_description,
-                                             action=action.flatten(0, 1))
+                                             action=action.flatten(0, 1),
+                                             targets=targets.flatten(0, 1) if self.pass_intv_ground_truth else None)
+
         # Add LDJ and prior NLL for full loss
         ldj = ldj[:,1:].flatten(0, 1).mean(dim=-1)  # Taking the mean over samples
         loss = nll + ldj

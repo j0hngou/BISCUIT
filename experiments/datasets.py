@@ -626,9 +626,9 @@ class iTHORDataset(data.Dataset):
         self.subsample_percentage = subsample_percentage if not debug_data else 0.05
         self.subsample_chunk = subsample_chunk if not debug_data else 0
 
-        if kwargs.get('perfect_interactions', False):
-            self.return_latents = True
+        if kwargs.get('pass_intv_ground_truth'):
             self.return_targets = True
+        
         # Loading data
         data = self.load_data_from_folder(data_split_folder)
         # Preparing images

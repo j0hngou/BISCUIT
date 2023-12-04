@@ -68,6 +68,8 @@ class InteractionTransitionPrior(nn.Module):
             if kwargs.get('text_encoder', None) is None:
                 kwargs['text_encoder'] = 'sentence_transformer'
             text_encoder = kwargs['text_encoder']
+        if kwargs.get('pass_intv_ground_truth', False):
+            self.pass_intv_ground_truth = True
 
         # Create prior network. The prior network is a simple MLP with
         # the input of the previous latent variable z_i^t, all variables z^t,
@@ -177,7 +179,7 @@ class InteractionTransitionPrior(nn.Module):
     def requires_prev_state(self):
         return self.add_prev_state
 
-    def _get_prior_params(self, z_t, action, tokenized_description=None, detach_weights=False, **kwargs):
+    def _get_prior_params(self, z_t, action, tokenized_description=None, detach_weights=False, targets=None, **kwargs):
         """
         Abstracting the execution of the networks for estimating the prior parameters.
 
@@ -194,6 +196,7 @@ class InteractionTransitionPrior(nn.Module):
                 z_t=z_t.reshape(action.shape[0], -1, z_t.shape[-1])[:,0], 
                 detach_weights=detach_weights,
                 tokenized_description=tokenized_description,
+                targets=targets,
                 **kwargs)
         
         if z_t.shape[0] > action_feats.shape[0]:
@@ -215,7 +218,7 @@ class InteractionTransitionPrior(nn.Module):
         prior_params = [p.flatten(-2, -1) for p in prior_params]
         return prior_params, extra_info
 
-    def _get_action_feats(self, action, tokenized_description=None, temp_factor=1.0, z_t=None, detach_weights=False, **kwargs):
+    def _get_action_feats(self, action, tokenized_description=None, temp_factor=1.0, z_t=None, detach_weights=False, targets=None, **kwargs):
         """
         Determining the interaction variables from the action and previous time step.
 
@@ -253,11 +256,20 @@ class InteractionTransitionPrior(nn.Module):
         action_logits = action
         action = torch.tanh(action * temp_factor)
 
+        if self.pass_intv_ground_truth and targets is not None:
+            # Overwrite predicted action with ground truth
+            # Actions are assumed to be in the range [-1, 1], targets are {0, 1}
+            # We have more actions than targets, so we need to replace the first N actions
+            # with the targets and set the rest to -1
+            action = action.clone()
+            action[..., :targets.shape[-1], :] = (targets * 2 - 1).unsqueeze(dim=-1)
+            action[..., targets.shape[-1]:, :] = 0.
+
         action_feats = self.action_layer(action, detach_weights=detach_weights)
         action_feats = action_feats.unsqueeze(dim=1)
         return action_feats, {'action': action, 'abs_logits': abs_logits, 'action_logits': action_logits}
 
-    def get_interaction_quantization(self, action, prev_state=None, soft=False, tokenized_description=None, tokenized=True):
+    def get_interaction_quantization(self, action, prev_state=None, soft=False, tokenized_description=None, tokenized=True, targets=None):
         """
         Return (binarized) interaction variables.
 
@@ -298,6 +310,10 @@ class InteractionTransitionPrior(nn.Module):
             action_idx = torch.tanh(action)
         else:
             action_idx = (action > 0).long()
+        if targets is not None:
+            action_idx = action_idx.clone()
+            action_idx[..., :targets.shape[-1]] = targets
+            action_idx[..., targets.shape[-1]:] = 0
         return action_idx
 
     def kl_divergence(self, z_t, action, z_t1_mean, z_t1_logstd, z_t1_sample):
@@ -308,7 +324,7 @@ class InteractionTransitionPrior(nn.Module):
                                      z_t1_logstd=z_t1_logstd,
                                      z_t1_mean=z_t1_mean)
 
-    def sample_based_nll(self, z_t, z_t1, action, tokenized_description=None, use_KLD=False, z_t1_logstd=None, z_t1_mean=None):
+    def sample_based_nll(self, z_t, z_t1, action, tokenized_description=None, use_KLD=False, z_t1_logstd=None, z_t1_mean=None, targets=None):
         """
         Calculate the negative log likelihood of p(z^t1|z^t,I^t+1) in BISCUIT.
         For the NF, we cannot make use of the KL divergence since the normalizing flow 
@@ -336,6 +352,7 @@ class InteractionTransitionPrior(nn.Module):
         prior_params, extra_info = self._get_prior_params(z_t.flatten(0, 1), 
                                                           action=action,
                                                           tokenized_description=tokenized_description,
+                                                          targets=targets,
                                                           **extra_params)
 
         if not use_KLD:
