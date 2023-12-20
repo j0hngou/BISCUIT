@@ -148,3 +148,13 @@ demo_data/
 
 # VSCode
 .vscode/
+
+data_generation/1.*
+data_generation/glib*
+
+*.ckpt
+
+*/wandb/*
+
+*.err
+*.out
