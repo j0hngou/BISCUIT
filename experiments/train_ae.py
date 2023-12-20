@@ -9,9 +9,9 @@ import pytorch_lightning as pl
 import sys
 sys.path.append('../')
 from models.ae import Autoencoder
-from experiments.datasets import VoronoiDataset, CausalWorldDataset, iTHORDataset
+from experiments.datasets import VoronoiDataset, CausalWorldDataset, iTHORDataset, GridworldDataset
 from experiments.utils import train_model, print_params
-
+import wandb
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -32,6 +32,7 @@ if __name__ == '__main__':
     parser.add_argument('--mi_reg_weight', type=float, default=0.0)
     parser.add_argument('--logger_name', type=str, default='')
     parser.add_argument('--files_to_save', type=str, nargs='+', default='')
+    parser.add_argument('--subsample_percentage', type=float, default=1.0)
 
     args = parser.parse_args()
     pl.seed_everything(args.seed)
@@ -43,16 +44,18 @@ if __name__ == '__main__':
         DataClass = CausalWorldDataset
     elif 'ithor' in args.data_dir:
         DataClass = iTHORDataset
+    elif 'gridworld' in args.data_dir:
+        DataClass = GridworldDataset
     else:
         assert False, 'Unknown dataset'
     
     train_dataset = DataClass(
-        data_folder=args.data_dir, split='train', single_image=True, seq_len=1, cluster=args.cluster)
+        data_folder=args.data_dir, split='train', single_image=True, seq_len=1, cluster=args.cluster, subsample_percentage=args.subsample_percentage)
     val_dataset = DataClass(
-        data_folder=args.data_dir, split='val', single_image=True, seq_len=1, cluster=args.cluster)
+        data_folder=args.data_dir, split='val', single_image=True, seq_len=1, cluster=args.cluster, subsample_percentage=args.subsample_percentage)
     test_dataset = DataClass(
         data_folder=args.data_dir, split='test_indep', single_image=True, seq_len=1,
-        causal_vars=train_dataset.target_names(), cluster=args.cluster)
+        causal_vars=train_dataset.target_names(), cluster=args.cluster, subsample_percentage=args.subsample_percentage)
     train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size,
                                    shuffle=True, pin_memory=True, drop_last=True, num_workers=args.num_workers)
     val_loader = data.DataLoader(val_dataset, batch_size=args.batch_size,
@@ -75,6 +78,10 @@ if __name__ == '__main__':
         logger_name += '/' + args_logger_name
 
     print_params(logger_name, model_args)
+    
+    w = wandb.init(project='gridworld-biscuit', name=logger_name, config=model_args)
+    
+    logger = pl.loggers.WandbLogger(name=logger_name, offline=args.offline, id=w.id)
 
     train_model(model_class=model_class,
                 train_loader=train_loader,
@@ -82,7 +89,8 @@ if __name__ == '__main__':
                 test_loader=test_loader,
                 progress_bar_refresh_rate=0 if args.cluster else 1,
                 logger_name=logger_name,
-                check_val_every_n_epoch=min(10, args.max_epochs),
+                wandb_logger=logger,
+                check_val_every_n_epoch=min(1, args.max_epochs),
                 gradient_clip_val=0.1,
                 action_size=train_dataset.action_size() if DataClass == CausalWorldDataset else -1,
                 **model_args)
