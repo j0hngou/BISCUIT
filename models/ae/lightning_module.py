@@ -59,6 +59,7 @@ class Autoencoder(pl.LightningModule):
         else:
             EncoderClass = Encoder
             DecoderClass = Decoder
+        use_coordconv = kwargs.get('use_coordconv', False)
         self.encoder = EncoderClass(num_latents=self.hparams.num_latents,
                                     c_hid=self.hparams.c_hid,
                                     c_in=self.hparams.c_in,
@@ -66,13 +67,15 @@ class Autoencoder(pl.LightningModule):
                                     act_fn=nn.SiLU,
                                     residual=True,
                                     num_blocks=2,
-                                    variational=False)
+                                    variational=False,
+                                    use_coordconv=use_coordconv)
         self.decoder = DecoderClass(num_latents=self.hparams.num_latents + max(0, self.hparams.action_size),
                                     c_hid=self.hparams.c_hid,
                                     c_out=self.hparams.c_in,
                                     width=self.hparams.img_width,
                                     num_blocks=2,
-                                    act_fn=nn.SiLU)
+                                    act_fn=nn.SiLU,
+                                    use_coordconv=use_coordconv)
         if self.hparams.action_size > 0 and self.hparams.mi_reg_weight > 0:
             self.action_mi_estimator = nn.Sequential(
                 nn.Linear(self.hparams.action_size + self.hparams.num_latents, self.hparams.c_hid),
@@ -173,7 +176,7 @@ class Autoencoder(pl.LightningModule):
 
     @staticmethod
     def get_callbacks(exmp_inputs=None, cluster=False, **kwargs):
-        img_callback = AELogCallback(exmp_inputs, every_n_epochs=10)
+        img_callback = AELogCallback(exmp_inputs, every_n_epochs=1)
         # Create learning rate callback
         lr_callback = LearningRateMonitor('step')
         return [lr_callback, img_callback]

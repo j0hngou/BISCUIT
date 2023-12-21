@@ -33,6 +33,7 @@ if __name__ == '__main__':
     parser.add_argument('--logger_name', type=str, default='')
     parser.add_argument('--files_to_save', type=str, nargs='+', default='')
     parser.add_argument('--subsample_percentage', type=float, default=1.0)
+    parser.add_argument('--use_coordconv', action='store_true')
 
     args = parser.parse_args()
     pl.seed_everything(args.seed)
