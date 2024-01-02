@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from coordconv import CoordConv2d
+from .coordconv import CoordConv2d
 
 
 class Encoder(nn.Module):
