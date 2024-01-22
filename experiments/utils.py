@@ -13,7 +13,7 @@ from shutil import copyfile
 
 import sys
 sys.path.append('../')
-from experiments.datasets import VoronoiDataset, CausalWorldDataset, iTHORDataset
+from experiments.datasets import VoronoiDataset, CausalWorldDataset, iTHORDataset, GridworldDataset
 from pytorch_lightning.loggers import WandbLogger
 import wandb
 
@@ -59,6 +59,10 @@ def load_datasets(args):
     elif 'ithor' in args.data_dir:
         data_name = 'ithor' + args.data_dir.split('ithor')[-1].replace('/','')
         DataClass = iTHORDataset
+        dataset_args = {}
+    elif 'gridworld' in args.data_dir:
+        data_name = 'gridworld' + args.data_dir.split('gridworld')[-1].replace('/','')
+        DataClass = GridworldDataset
         dataset_args = {}
     else:
         assert False, f'Unknown data class for {args.data_dir}'
@@ -268,3 +272,4 @@ def train_model(model_class, train_loader, val_loader,
                 log_file = os.path.join(wandb.run.dir, f'test_results_{prefix}.json')
             with open(log_file, 'w') as f:
                 json.dump(test_result, f, indent=4)
+        print(f"Model paths: {model_paths}")

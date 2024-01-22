@@ -20,7 +20,7 @@ sys.path.append('../../')
 from models.shared.visualization import visualize_reconstruction
 from models.shared.utils import log_matrix
 from models.shared.causal_encoder import CausalEncoder
-from experiments.datasets import iTHORDataset, CausalWorldDataset
+from experiments.datasets import iTHORDataset, CausalWorldDataset, GridworldDataset
 import wandb
 
 
@@ -187,7 +187,7 @@ class CorrelationMetricsLogCallback(pl.Callback):
                                 causal_var_info=causal_var_info,
                                 single_linear=True,
                                 c_in=pl_module.hparams.num_latents*2,
-                                warmup=0)
+                                warmup=0).float()
         optimizer, _ = encoder.configure_optimizers()
         if isinstance(optimizer, (list, tuple)):
             optimizer = optimizer[0]
@@ -202,8 +202,8 @@ class CorrelationMetricsLogCallback(pl.Callback):
         for epoch_idx in range_iter:
             avg_loss = 0.0
             for inps, latents in train_loader:
-                inps = inps.to(device)
-                latents = latents.to(device)
+                inps = inps.to(device).float()
+                latents = latents.to(device).float()
                 inps, latents = self._prepare_input(inps, target_assignment, latents)
                 loss = encoder._get_loss([inps, latents], mode=None)
                 optimizer.zero_grad()
@@ -427,7 +427,41 @@ class CorrelationMetricsLogCallback(pl.Callback):
                     wandb.log({f'corr_callback_{tag}_diag_grouped_latents{self.log_postfix}': r2_avg_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
                     wandb.log({f'corr_callback_{tag}_max_off_diag_grouped_latents{self.log_postfix}': max_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
                     wandb.log({f'corr_callback_{tag}_off_diag_grouped_latents{self.log_postfix}': r2_avg_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
-
+        if isinstance(self.dataset, GridworldDataset):
+            if values.shape[1] == 18:
+                tvalues = torch.from_numpy(values)
+                tvalues = torch.cat(
+                    [tvalues[:, :2].mean(dim=-1, keepdims=True), tvalues[:, 2:4].mean(dim=-1, keepdims=True),
+                     tvalues[:, 4:6].mean(dim=-1, keepdims=True), tvalues[:, 6:9],
+                     tvalues[:, 9:10], tvalues[:, 10:12].mean(dim=-1, keepdims=True), tvalues[:, 12:13],
+                     tvalues[:, 13:15].mean(dim=-1, keepdims=True), tvalues[:, 15:16],
+                        tvalues[:, 16:18].mean(dim=-1, keepdims=True)], dim=-1).abs()
+                row_ind, col_ind = linear_sum_assignment(tvalues, maximize=True)
+                permuted_tvalues = tvalues[:, col_ind]
+                permuted_tvalues = permuted_tvalues[row_ind, :]
+                diagonal_mask = torch.eye(permuted_tvalues.size(0), dtype=torch.bool)
+                non_diagonal_mask = ~diagonal_mask
+                non_diagonal_elements = permuted_tvalues[non_diagonal_mask]
+                r2_avg_diag = permuted_tvalues.trace() / permuted_tvalues.size(0)
+                max_off_diag = non_diagonal_elements.max()
+                r2_avg_off_diag = non_diagonal_elements.mean()
+                if pl_module is None:
+                    if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+                        trainer.logger.experiment.add_scalar(f'corr_callback_{tag}_diag_grouped_latents{self.log_postfix}', r2_avg_diag, global_step=trainer.global_step)
+                        trainer.logger.experiment.add_scalar(f'corr_callback_{tag}_max_off_diag_grouped_latents{self.log_postfix}', max_off_diag, global_step=trainer.global_step)
+                        trainer.logger.experiment.add_scalar(f'corr_callback_{tag}_off_diag_grouped_latents{self.log_postfix}', r2_avg_off_diag, global_step=trainer.global_step)
+                    else:
+                        wandb.log({f'corr_callback_{tag}_diag_grouped_latents{self.log_postfix}': r2_avg_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+                        wandb.log({f'corr_callback_{tag}_max_off_diag_grouped_latents{self.log_postfix}': max_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+                        wandb.log({f'corr_callback_{tag}_off_diag_grouped_latents{self.log_postfix}': r2_avg_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+                elif not isinstance(pl_module.logger, pl.loggers.WandbLogger):
+                    pl_module.log(f'corr_callback_{tag}_diag_grouped_latents{self.log_postfix}', r2_avg_diag)
+                    pl_module.log(f'corr_callback_{tag}_max_off_diag_grouped_latents{self.log_postfix}', max_off_diag)
+                    pl_module.log(f'corr_callback_{tag}_off_diag_grouped_latents{self.log_postfix}', r2_avg_off_diag)
+                else:
+                    wandb.log({f'corr_callback_{tag}_diag_grouped_latents{self.log_postfix}': r2_avg_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+                    wandb.log({f'corr_callback_{tag}_max_off_diag_grouped_latents{self.log_postfix}': max_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+                    wandb.log({f'corr_callback_{tag}_off_diag_grouped_latents{self.log_postfix}': r2_avg_off_diag}, step=trainer.global_step + 100 if is_test else trainer.global_step)
 
 class PermutationCorrelationMetricsLogCallback(CorrelationMetricsLogCallback):
     """ 
@@ -462,6 +496,17 @@ class PermutationCorrelationMetricsLogCallback(CorrelationMetricsLogCallback):
         elif isinstance(self.dataset, CausalWorldDataset):
             ta = torch.cat([ta[:,:6],
                             ta[:,6:].sum(dim=-1, keepdims=True)], dim=-1)
+        elif isinstance(self.dataset, GridworldDataset):
+            ta = torch.cat([ta[:,:2].sum(dim=-1, keepdims=True),
+                            ta[:,2:4].sum(dim=-1, keepdims=True),
+                            ta[:,4:6].sum(dim=-1, keepdims=True),
+                            ta[:,6:9],
+                            ta[:,9:10],
+                            ta[:,10:12].sum(dim=-1, keepdims=True),
+                            ta[:,12:13],
+                            ta[:,13:15].sum(dim=-1, keepdims=True),
+                            ta[:,15:16],
+                            ta[:,16:18].sum(dim=-1, keepdims=True)], dim=-1)
         if trainer.current_epoch == 0:
             ta[:,0] = 1
             ta[:,1:] = 0

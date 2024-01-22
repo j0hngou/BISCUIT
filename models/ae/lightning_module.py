@@ -110,14 +110,23 @@ class Autoencoder(pl.LightningModule):
                                              max_iters=self.hparams.max_iters)
         return [optimizer], [{'scheduler': lr_scheduler, 'interval': 'step'}]
 
-    def _get_loss(self, batch, mode='train'):
+    def _get_loss(self, batch, mode='train', weighted_loss=(0.2, 0.8)):
         # Trained by standard MSE loss
         if isinstance(batch, (tuple, list)) and len(batch) == 2:
             imgs, actions = batch
         else:
             imgs, actions = batch, None
         x_rec, z = self.forward(imgs, actions=actions, return_z=True)
-        loss_rec = F.mse_loss(x_rec, imgs)
+        # Check if all channels are close to 0 (black pixels)
+        # Adjust the tolerance level if needed
+        is_black = torch.all(imgs <= 1e-6, dim=1, keepdim=True)
+
+        # Create a weight matrix based on the condition
+        weights = torch.where(is_black, weighted_loss[0] * torch.ones_like(imgs), weighted_loss[1] * torch.ones_like(imgs))
+
+        # Calculate the weighted MSE loss
+        loss_rec = torch.mean(weights * (x_rec - imgs) ** 2)
+        # loss_rec = F.mse_loss(x_rec, imgs)
         loss_reg = (z ** 2).mean()
         self.log(f'{mode}_loss_rec', loss_rec)
         self.log(f'{mode}_loss_reg', loss_reg)

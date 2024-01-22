@@ -783,12 +783,21 @@ class Gridworld:
             # Using the class name to determine the type of the entity
             entity_class_name = entity.__class__.__name__.lower()
             base_key = f'{entity_class_name}_{entity.color}'
-            causal_dict[f'{base_key}_position'] = (entity.x, entity.y)
+            if isinstance(entity, TrafficLight):
+                if not are_light_positions_fixed:
+                    causal_dict[f'{base_key}_position'] = (entity.x, entity.y)
+            else:
+                causal_dict[f'{base_key}_position'] = (entity.x, entity.y)
             if not isinstance(entity, Obstacle):
-                causal_dict[f'{base_key}_orientation'] = entity.orientation
+                if isinstance(entity, TrafficLight):
+                    if not are_light_positions_fixed:
+                        causal_dict[f'{base_key}_orientation'] = entity.orientation
+                else:
+                    causal_dict[f'{base_key}_orientation'] = entity.orientation
             # causal_dict[f'{base_key}_color'] = entity.color
             if isinstance(entity, TrafficLight):
                 causal_dict[f'{base_key}_state'] = entity.state
+        # If traffic light positions are fixed, the light position and orientation are not causal variables
         return causal_dict
 
     def get_causal_vector(self, are_light_positions_fixed=True):

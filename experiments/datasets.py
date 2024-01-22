@@ -877,7 +877,7 @@ class GridworldDataset(Dataset):
                  return_targets=False, return_latents=False, triplet=False,
                  seq_len=2, cluster=False, try_encodings=False, categorical_actions=False,
                  return_text=False, subsample_percentage=1.0, subsample_chunk=0,
-                 debug_data=False, **kwargs):
+                 debug_data=False, episode_length=20, **kwargs):
 
         super().__init__()
         self.cluster = cluster
@@ -897,10 +897,12 @@ class GridworldDataset(Dataset):
         # Store the file paths instead of loading all data
         self.data_files = sorted(glob(os.path.join(data_folder, f'{split}', '*.npz')))
         self.data_files = self.data_files[int(self.subsample_chunk * self.subsample_percentage * len(self.data_files)):int((self.subsample_chunk + 1) * self.subsample_percentage * len(self.data_files))]
+        print(len(self.data_files))
         self.indices = range(len(self.data_files) * (seq_len - 1))
-        self.indices_per_file = 40
+        self.indices_per_file = episode_length
         # Load metadata
         self.load_metadata(data_folder, split)
+        self.create_var_info()
         
         # Load first file to get the image size
         data_seq = np.load(self.data_files[0], allow_pickle=True)
@@ -924,7 +926,10 @@ class GridworldDataset(Dataset):
         # self.imgs = np.reshape(self.imgs, (-1,) + self.imgs.shape[2:])
         self.imgs = torch.from_numpy(self.imgs)
 
-        self.robot_state = data['actions']
+        self.robot_state = data['actions']#[:, :-1]
+        # Normalize robot state by grid shape
+        self.robot_state = self.robot_state[:, :2] / (self.grid_x - 1) # Assuming a square grid!!! TODO: Fix this
+        self.robot_state = self.robot_state.astype(np.float32)
         self.targets = data['interventions']
         self.latent_state = data['causals']
 
@@ -933,18 +938,37 @@ class GridworldDataset(Dataset):
             self.token_type_ids = data['token_type_ids']
             self.attention_mask = data['attention_mask']
 
+    # def load_data_from_folder(self, data_folder, split):
+    #     data_folder = os.path.join(data_folder, f'{split}')
+    #     # data_files = sorted(glob(os.path.join(data_folder, '*.npz')))
+    #     data = {}
+    #     for file in tqdm(self.data_files, desc=f'Loading sequences of {self.split_name}', leave=False, total=len(self.data_files)):
+    #         data_seq = np.load(file, allow_pickle=True)
+    #         for key, val in data_seq.items():
+    #             if key not in data:
+    #                 data[key] = val
+    #             else:
+    #                 data[key] = np.concatenate([data[key], val], axis=0)
+    #     return data
+    # Okay this was stupid, static allocation and copying new arrays on every iteration is deadly slow
+
+
     def load_data_from_folder(self, data_folder, split):
         data_folder = os.path.join(data_folder, f'{split}')
-        # data_files = sorted(glob(os.path.join(data_folder, '*.npz')))
         data = {}
         for file in tqdm(self.data_files, desc=f'Loading sequences of {self.split_name}', leave=False, total=len(self.data_files)):
             data_seq = np.load(file, allow_pickle=True)
             for key, val in data_seq.items():
                 if key not in data:
-                    data[key] = val
+                    data[key] = [val] # Use list because of its dynamic allocation
                 else:
-                    data[key] = np.concatenate([data[key], val], axis=0)
+                    data[key].append(val)
+
+        for key in data:
+            data[key] = np.concatenate(data[key], axis=0)
+
         return data
+
 
     def load_metadata(self, data_folder, split):
         metadata_file = os.path.join(data_folder, f'{split}_metadata.json')
@@ -955,6 +979,19 @@ class GridworldDataset(Dataset):
         self.causal_keys = metadata['causal_keys']
         self.flattened_causals = metadata['flattened_causals']
         self.are_interventions_stochastic = metadata['are_interventions_stochastic']
+        self.grid_x = metadata['grid_x']
+        self.grid_y = metadata['grid_y']
+        self.sprite_size = metadata['sprite_size']
+
+    def create_var_info(self):
+        GridworldDataset.VAR_INFO = OrderedDict({})
+        for i, key in enumerate(self.flattened_causals):
+            if 'position' in key:
+                self.VAR_INFO[key] = 'continuous_1'
+            elif 'orientation' in key:
+                self.VAR_INFO[key] = 'angle'
+            else:
+                self.VAR_INFO[key] = 'categ_2'
 
     def encode_dataset(self, encode_func, batch_size=16):
         # Function to encode the dataset using a provided encoding function
@@ -992,8 +1029,8 @@ class GridworldDataset(Dataset):
         return len(self.data_files) * (self.indices_per_file if self.single_image else self.seq_len - 1)
     
     def action_size(self):
-        # Return the size of the action space
-        return len(self.action_types)
+        # return len(self.action_types)
+        return 2
     
     def num_labels(self):
         return len(self.flattened_causals)
@@ -1009,6 +1046,9 @@ class GridworldDataset(Dataset):
     
     def get_inp_channels(self):
         return self.imgs.shape[-1]
+
+    def get_causal_var_info(self):
+        return GridworldDataset.VAR_INFO
 
     def __getitem__(self, idx):
         idx = self.indices[idx]

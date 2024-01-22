@@ -34,7 +34,7 @@ def save_metadata(dataset_name, split, gridworld):
             json.dump(metadata, f, indent=4)        
 
 
-def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, sprite_size=32, fixed_light_positions=[], save_metadata_flag=False):
+def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, sprite_size=32, fixed_light_positions=None, save_metadata_flag=False):
 
     random.seed(seed)
     np.random.seed(seed)
@@ -153,6 +153,7 @@ if __name__ == '__main__':
     parser.add_argument('--val_seeds', type=int, default=100, help='Number of seeds for the validation split')
     parser.add_argument('--test_seeds', type=int, default=100, help='Number of seeds for the test split')
     parser.add_argument('--batch_size', type=int, default=50, help='Batch size')
+    parser.add_argument('--dataset_name', type=str, default='gridworld_small_ex', help='Name of the dataset')
     args = parser.parse_args()
 
     train_seeds = args.train_seeds
@@ -162,6 +163,7 @@ if __name__ == '__main__':
     grid_x = args.grid_x
     grid_y = args.grid_y
     sprite_size = args.sprite_size
+    dataset_name = args.dataset_name
 
     if args.fixed_light_positions is None:
         fixed_light_positions = [(0, 0, 'down'), (3, grid_y - 1, 'up'), (grid_x - 3, 0, 'down')]
@@ -170,10 +172,12 @@ if __name__ == '__main__':
 
     seeds = range(train_seeds)
 
-    gen_data(seeds, batch_size, 'train', dataset_name='gridworld_small', grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions)
+    gen_data(seeds, batch_size, 'train', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions)
 
     seeds = range(train_seeds, train_seeds + val_seeds)
-    gen_data(seeds, batch_size, 'val', dataset_name='gridworld_small', grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions)
+    print(f'Generating {seeds} seeds for the validation split')
+    gen_data(seeds, batch_size, 'val', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions)
 
     seeds = range(train_seeds + val_seeds, train_seeds + val_seeds + test_seeds)
-    gen_data(seeds, batch_size, 'test', dataset_name='gridworld_small', grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions)
+    print(f'Generating {seeds} seeds for the test split')
+    gen_data(seeds, batch_size, 'test', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions)

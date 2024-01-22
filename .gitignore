@@ -145,3 +145,5 @@ demo_data/
 *.png
 *.gif
 *.ckpt
+*.out
+*.err
