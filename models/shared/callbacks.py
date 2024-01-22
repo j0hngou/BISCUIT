@@ -592,6 +592,10 @@ class InteractionVisualizationCallback(pl.Callback):
 
         true_intv = torch.cat(all_true_intvs, dim=0).long()
         pred_intv = torch.cat(all_pred_intvs, dim=0)
+        # perfect interventions
+        pred_intv = torch.zeros_like(pred_intv)
+        pred_intv[:, :true_intv.shape[1]] = true_intv
+        # pred_intv = true_intv.expand(-1, pred_intv.shape[1])
         num_true_targets = true_intv.shape[1]
         num_pred_targets = pred_intv.shape[1]
 

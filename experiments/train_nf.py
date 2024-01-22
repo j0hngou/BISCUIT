@@ -77,7 +77,7 @@ if __name__ == '__main__':
     model_args['text'] = args.text
     model_class = BISCUITNF
     textornot = 'text' if args.text else 'notext'
-    logger_name = f'BISCUITNF_{args.num_latents}l_{datasets["train"].num_vars()}b_{args.c_hid}hid_{data_name}_{textornot}_ss{args.subsample_percentage}_sc{args.subsample_chunk}'
+    logger_name = f'BISCUITNF_{args.num_latents}l_{datasets["train"].num_vars()}b_{args.c_hid}hid_{data_name}_{textornot}_ss{args.subsample_percentage}_sc{args.subsample_chunk}_perfectintv'
     args_logger_name = model_args.pop('logger_name')
     if len(args_logger_name) > 0:
         logger_name += '/' + args_logger_name

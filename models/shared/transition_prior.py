@@ -177,7 +177,7 @@ class InteractionTransitionPrior(nn.Module):
     def requires_prev_state(self):
         return self.add_prev_state
 
-    def _get_prior_params(self, z_t, action, tokenized_description=None, detach_weights=False, **kwargs):
+    def _get_prior_params(self, z_t, action, tokenized_description=None, detach_weights=False, intv_targets=None, **kwargs):
         """
         Abstracting the execution of the networks for estimating the prior parameters.
 
@@ -194,6 +194,7 @@ class InteractionTransitionPrior(nn.Module):
                 z_t=z_t.reshape(action.shape[0], -1, z_t.shape[-1])[:,0], 
                 detach_weights=detach_weights,
                 tokenized_description=tokenized_description,
+                intv_targets=intv_targets,
                 **kwargs)
         
         if z_t.shape[0] > action_feats.shape[0]:
@@ -215,7 +216,7 @@ class InteractionTransitionPrior(nn.Module):
         prior_params = [p.flatten(-2, -1) for p in prior_params]
         return prior_params, extra_info
 
-    def _get_action_feats(self, action, tokenized_description=None, temp_factor=1.0, z_t=None, detach_weights=False, **kwargs):
+    def _get_action_feats(self, action, tokenized_description=None, temp_factor=1.0, z_t=None, detach_weights=False, intv_targets=None, **kwargs):
         """
         Determining the interaction variables from the action and previous time step.
 
@@ -252,6 +253,13 @@ class InteractionTransitionPrior(nn.Module):
         abs_logits = torch.abs(action)
         action_logits = action
         action = torch.tanh(action * temp_factor)
+        
+        if intv_targets is not None:
+            # Replace the action with the interventional targets
+            # intv targets has a lower dimensionality than action
+            # so we have to expand it with zeros
+            action = torch.zeros_like(action)
+            action[:, :intv_targets.shape[-1], :] = intv_targets.transpose(-1, -2)
 
         action_feats = self.action_layer(action, detach_weights=detach_weights)
         action_feats = action_feats.unsqueeze(dim=1)
@@ -308,7 +316,7 @@ class InteractionTransitionPrior(nn.Module):
                                      z_t1_logstd=z_t1_logstd,
                                      z_t1_mean=z_t1_mean)
 
-    def sample_based_nll(self, z_t, z_t1, action, tokenized_description=None, use_KLD=False, z_t1_logstd=None, z_t1_mean=None):
+    def sample_based_nll(self, z_t, z_t1, action, tokenized_description=None, use_KLD=False, z_t1_logstd=None, z_t1_mean=None, intv_targets=None):
         """
         Calculate the negative log likelihood of p(z^t1|z^t,I^t+1) in BISCUIT.
         For the NF, we cannot make use of the KL divergence since the normalizing flow 
@@ -338,6 +346,7 @@ class InteractionTransitionPrior(nn.Module):
         prior_params, extra_info = self._get_prior_params(z_t.flatten(0, 1), 
                                                           action=action,
                                                           tokenized_description=tokenized_description,
+                                                          intv_targets=intv_targets,
                                                           **extra_params)
 
         if not use_KLD:

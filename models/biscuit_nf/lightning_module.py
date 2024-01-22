@@ -79,6 +79,8 @@ class BISCUITNF(BISCUITVAE):
         """ Main training method for calculating the loss """
         if len(batch) == 2:
             x_enc, action = batch
+        elif len(batch) == 3:
+            x_enc, action, intv_targets = batch
         elif len(batch) == 5:
             x_enc, action, input_ids, token_type_ids, attention_mask = batch
         else:
@@ -102,6 +104,7 @@ class BISCUITNF(BISCUITVAE):
         nll = self.prior_t1.sample_based_nll(z_t=z_sample[:,:-1].flatten(0, 1),
                                              z_t1=z_sample[:,1:].flatten(0, 1),
                                              tokenized_description=tokenized_description,
+                                             intv_targets=intv_targets if len(batch) == 3 else None,
                                              action=action.flatten(0, 1))
         # Add LDJ and prior NLL for full loss
         ldj = ldj[:,1:].flatten(0, 1).mean(dim=-1)  # Taking the mean over samples
