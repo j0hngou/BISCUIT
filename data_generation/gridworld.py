@@ -369,14 +369,17 @@ class Gridworld:
         for row in self.grid:
             print(' '.join(row))
 
-    def step(self):
+    def step(self, intervention=None, pre_step_causals=None):
         """
         Advances the state of the gridworld by one time step.
 
         During each step, this method updates the positions and states of all entities in the gridworld according to their behaviors and interactions. It also handles the logic for traffic lights, entity movements, and collisions.
         
         This is the main method used to progress the simulation and should be called repeatedly in a loop to simulate continuous time.
+        
+        If an intervention is passed, the dynamics of the entity pertaining to the intervention are frozen for the current step.
         """
+        # pre_step_causals = self.get_causals()
         if not self.entity_groups:
             self._build_entity_groups()
         self.step_count += 1
@@ -389,6 +392,32 @@ class Gridworld:
 
         # Enforce traffic rules
         self.enforce_traffic_rules()
+        if intervention:
+            frozen_vehicles = self.identify_frozen_vehicles(intervention, pre_step_causals)
+            # Update binary intervention dictionary
+            for vehicle in frozen_vehicles:
+                if vehicle.speed != 0:
+                    dx, dy = vehicle.predict_next_position()
+                    if self.is_cell_free(dx, dy):
+                        intervention[f'{vehicle.__class__.__name__.lower()}_{vehicle.color}_position'] = 1
+                        vehicle.set_speed(0)
+            # If we moved an obstacle to a position that a vehicle would have moved to, we need to update the intervention dictionary
+            for key, value in intervention.items():
+                if 'obstacle' in key and value == 1:
+                    # Extract the color of the obstacle from the key
+                    color_str = key.split('_')[1]
+                    color = tuple(map(int, color_str[1:-1].split(', ')))
+
+                    # Find the obstacle entity with the given color
+                    obstacle = next((entity for entity in self.entities if isinstance(entity, Obstacle) and entity.color == color), None)
+                    if obstacle:
+                        for vehicle in (x for x in self.entities if isinstance(x, Vehicle)):
+                            if isinstance(vehicle, Vehicle) and self.is_obstacle_blocking_vehicle(vehicle, obstacle, self.get_causals()):
+                                if vehicle.speed != 0:
+                                    dx, dy = vehicle.predict_next_position()
+                                    if (dx, dy) == (obstacle.x, obstacle.y):
+                                        intervention[f'vehicle_{vehicle.color}_position'] = 1
+                                break
         # self.randomly_change_car_orientation()
         # Temporary structure to store entity movements
         movements = []
@@ -411,6 +440,66 @@ class Gridworld:
 
         # Handle collisions
         self.handle_collisions()
+        
+        return intervention or None
+
+    def identify_frozen_vehicles(self, intervention, pre_step_causals):
+        """
+        Identifies the vehicle (if any) whose dynamics should be frozen for the current step based on the intervention.
+
+        Args:
+            gridworld (Gridworld): The gridworld instance.
+            intervention (dict): The intervention dictionary.
+            pre_step_causals (dict): The causals dictionary before the current step.
+
+        Returns:
+            Vehicle: The vehicle(s) to be frozen, or None if no vehicle should be frozen.
+        """
+        vehicles = []
+        for key, value in intervention.items():
+            # Check whether we changed a light's state
+            if 'trafficlight' in key and value == 1:  # Check if the intervention is on a traffic light's state
+                # Extract the color of the traffic light from the key
+                color_str = key.split('_')[1]
+                color = tuple(map(int, color_str[1:-1].split(', ')))  # Convert color string to tuple
+
+                # Find the traffic light entity with the given color
+                light = next((entity for entity in self.entities if isinstance(entity, TrafficLight) and entity.color == color), None)
+                if light:
+                    # Check for vehicles that are facing the light and are close enough to be affected
+                    for vehicle in self.entities:
+                        if isinstance(vehicle, Vehicle) and self.is_light_ahead(vehicle, light):
+                            vehicles.append(vehicle)
+            # Check whether we moved an obstacle that was blocking a vehicle
+            if 'obstacle' in key and value == 1:  # Check if the intervention is on an obstacle's position
+                # Extract the color of the obstacle from the key
+                color_str = key.split('_')[1]
+                color = tuple(map(int, color_str[1:-1].split(', ')))
+
+                # Find the obstacle entity with the given color
+                obstacle = next((entity for entity in self.entities if isinstance(entity, Obstacle) and entity.color == color), None)
+                if obstacle:
+                    # Check whether the obstacle was blocking a vehicle based on the pre-step causals
+                    for vehicle in (x for x in self.entities if isinstance(x, Vehicle)):
+                        if isinstance(vehicle, Vehicle) and self.is_obstacle_blocking_vehicle(vehicle, obstacle, pre_step_causals):
+                            vehicles.append(vehicle)
+            
+            if 'vehicle' in key and value == 1:
+                # Extract the color of the vehicle from the key
+                color_str = key.split('_')[1]
+                color = tuple(map(int, color_str[1:-1].split(', ')))
+
+                # Find the vehicle entity with the given color
+                vehicle = next((entity for entity in self.entities if isinstance(entity, Vehicle) and entity.color == color), None)
+                if vehicle:
+                    vehicles.append(vehicle)
+                    # Check whether the vehicle was about to collide with another vehicle based on the pre-step causals
+                    for other_vehicle in (x for x in self.entities if isinstance(x, Vehicle) and x != vehicle):
+                        if isinstance(other_vehicle, Vehicle) and self.is_vehicle_about_to_collide(vehicle, other_vehicle):
+                            # vehicles.append(vehicle)
+                            vehicles.append(other_vehicle)
+        return vehicles
+
 
     def intervene(self, entity, intervention, **intervention_args):
         if isinstance(entity, Vehicle):
@@ -475,15 +564,14 @@ class Gridworld:
         Gridworld.color_name_cache[rgb_tuple] = color_name
         return color_name
 
-    @staticmethod
-    def describe_action(causals, action):
+    def describe_action(self, causals, action):
         ACTION_MAPPING = {1: 'turned', 2: 'changed the state of', 3: 'moved'}
 
         if action == (-1, -1, -1):
             return "No action was performed."
 
         action_pos, action_code = action[:2], action[2]
-
+        traffic_lights = [x for x in self.entities if isinstance(x, TrafficLight)]
         entity_description = ""
         for key, value in causals.items():
             if 'position' in key and value == action_pos:
@@ -492,7 +580,14 @@ class Gridworld:
                 rgb_tuple = tuple(map(int, entity_color[1:-1].split(', ')))
                 color_name = Gridworld.get_color_name(rgb_tuple)
                 entity_description = f"{color_name} {entity_type}"
-                break
+            # elif action_code == 2: # Change state of traffic light
+        if action_code == 2:
+            for light in traffic_lights:
+                if light.x == action_pos[0] and light.y == action_pos[1]:
+                    entity_name, entity_color = light.__class__.__name__, light.color
+                    color_name = Gridworld.get_color_name(entity_color)
+                    entity_description = f"{color_name} traffic light"
+                
 
         if entity_description:
             action_desc = ACTION_MAPPING.get(action_code, 'performed an action on')
@@ -537,9 +632,9 @@ class Gridworld:
                     possible_moves = self.get_free_cells_around_entity(obstacle)
                     if possible_moves:
                         new_x, new_y = random.choice(possible_moves)
+                        action_code = (obstacle.x, obstacle.y, ACTION_MAPPING['move_to'])
                         self.intervene(obstacle, 'move_to', x=new_x, y=new_y)
                         binary_interventions[f'obstacle_{obstacle.color}_position'] = 1
-                        action_code = (obstacle.x, obstacle.y, ACTION_MAPPING['move_to'])
                 else:
                     if random.random() < 0.3:
                         # Turn the car
@@ -570,9 +665,9 @@ class Gridworld:
             possible_moves = self.get_free_cells_around_entity(entity)
             if possible_moves:
                 new_x, new_y = random.choice(possible_moves)
+                action_code = (entity.x, entity.y, ACTION_MAPPING['move_to'])
                 self.intervene(entity, 'move_to', x=new_x, y=new_y)
                 binary_interventions[f'obstacle_{entity.color}_position'] = 1
-                action_code = (entity.x, entity.y, ACTION_MAPPING['move_to'])
         description = f"You intervened on a {entity_type}_{entity.color} at ({entity.x}, {entity.y}) with action {action_code}."
         return action_code, binary_interventions
 
@@ -641,6 +736,28 @@ class Gridworld:
         elif vehicle.orientation == 'right' and light.orientation == 'left':
             return light.x > vehicle.x and light.y == vehicle.y
         return False
+
+    def is_obstacle_blocking_vehicle(self, vehicle, obstacle, causals):
+        if vehicle.orientation == 'up':
+            return causals[f'obstacle_{obstacle.color}_position'] == (vehicle.x, vehicle.y - 1)
+        elif vehicle.orientation == 'down':
+            return causals[f'obstacle_{obstacle.color}_position'] == (vehicle.x, vehicle.y + 1)
+        elif vehicle.orientation == 'left':
+            return causals[f'obstacle_{obstacle.color}_position'] == (vehicle.x - 1, vehicle.y)
+        elif vehicle.orientation == 'right':
+            return causals[f'obstacle_{obstacle.color}_position'] == (vehicle.x + 1, vehicle.y)
+
+    def is_vehicle_about_to_collide(self, vehicle, other_vehicle):
+        """
+        Checks whether a vehicle is about to collide with another vehicle.
+        """
+        # Other vehicle next position
+        next_x, next_y = vehicle.predict_next_position()
+        next_x_other, next_y_other = other_vehicle.predict_next_position()
+        if not other_vehicle.speed or not vehicle.speed:
+            return False
+        return (next_x, next_y) == (next_x_other, next_y_other)
+        
 
     def is_cell_free(self, x, y):
         return not self.entity_map[(x, y)]
@@ -981,7 +1098,7 @@ if __name__ == '__main__':
     fixed_light_positions = [(0, 0, 'down'), (3, grid_y - 1, 'up'), (grid_x - 3, 0, 'down')]#, (grid_x - 5, grid_y - 4, 'up'), (grid_x // 2, grid_y // 2, 'up')]
 
     gridworld.randomly_initialize(car_colors, light_colors, boulder_colors, num_cars=3, num_lights=3, num_boulders=3, fixed_light_positions=fixed_light_positions, x_percent=50, y_percent=10, z_percent=30)
-
+    pre_intervention_step = True
 
     gridworld.step()  # Initial step to set up the environment
     initial_frame = gridworld.render()
@@ -999,9 +1116,12 @@ if __name__ == '__main__':
 
     # Generation loop
     for _ in range(1, 25):  # Start from 1 since we already have the initial state
+        if pre_intervention_step:
+            gridworld.step()
         action, intervention = gridworld.semi_random_intervention()
         pre_step_causals = gridworld.get_causals()
-        gridworld.step()
+        if not pre_intervention_step:
+            gridworld.step(intervention)
         
         # Append action and intervention information
         actions.append(action)

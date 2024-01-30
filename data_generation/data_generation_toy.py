@@ -34,7 +34,7 @@ def save_metadata(dataset_name, split, gridworld):
             json.dump(metadata, f, indent=4)        
 
 
-def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, sprite_size=32, fixed_light_positions=None, save_metadata_flag=False):
+def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, sprite_size=32, fixed_light_positions=None, save_metadata_flag=False, pre_intervention_step=False):
 
     random.seed(seed)
     np.random.seed(seed)
@@ -89,10 +89,12 @@ def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, 
 
     # Generation loop
     for _ in range(1, 20):  # Start from 1 since we already have the initial state
-        action, intervention = gridworld.semi_random_intervention()
+        if pre_intervention_step:
+            gridworld.step()
         pre_step_causals = gridworld.get_causals()
-        gridworld.step()
-        
+        action, intervention = gridworld.semi_random_intervention()
+        if not pre_intervention_step:
+            intervention = gridworld.step(intervention, pre_step_causals)
         # Append action and intervention information
         actions.append(action)
         interventions.append(gridworld.interventions_to_binary_vector(intervention, gridworld.get_causals()))
@@ -154,6 +156,12 @@ if __name__ == '__main__':
     parser.add_argument('--test_seeds', type=int, default=100, help='Number of seeds for the test split')
     parser.add_argument('--batch_size', type=int, default=50, help='Batch size')
     parser.add_argument('--dataset_name', type=str, default='gridworld_small_ex', help='Name of the dataset')
+    parser.add_argument('--pre_intervention_step', default=False, action="store_true", help="""
+        If true, the intervention is applied before the step function is called.
+        This means that the intervention's effects will be visible in the next frame.
+        If false, the intervention is applied after the step function is called
+        but it freezes the dynamics of the environment pertained to the intervention.
+        """)
     args = parser.parse_args()
 
     train_seeds = args.train_seeds
@@ -181,3 +189,4 @@ if __name__ == '__main__':
     seeds = range(train_seeds + val_seeds, train_seeds + val_seeds + test_seeds)
     print(f'Generating {seeds} seeds for the test split')
     gen_data(seeds, batch_size, 'test', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions)
+    # run_simulation(8, 'check', dataset_name, grid_x, grid_y, sprite_size, fixed_light_positions, save_metadata_flag=True, pre_intervention_step=args.pre_intervention_step)
