@@ -258,8 +258,11 @@ class InteractionTransitionPrior(nn.Module):
             # Replace the action with the interventional targets
             # intv targets has a lower dimensionality than action
             # so we have to expand it with zeros
-            action = torch.zeros_like(action)
-            action[:, :intv_targets.shape[-1], :] = intv_targets.transpose(-1, -2)
+            # action = torch.zeros_like(action)
+            # action[:, :intv_targets.shape[-1], :] = intv_targets.transpose(-1, -2)
+            action = action.clone()
+            action[..., :targets.shape[-1], :] = (intv_targets * 2 - 1).unsqueeze(dim=-1)
+            action[..., targets.shape[-1]:, :] = 0.
 
         action_feats = self.action_layer(action, detach_weights=detach_weights)
         action_feats = action_feats.unsqueeze(dim=1)
