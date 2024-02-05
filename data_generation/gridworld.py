@@ -390,8 +390,6 @@ class Gridworld:
         #         if isinstance(entity, TrafficLight):
         #             entity.update(self.step_count)
 
-        # Enforce traffic rules
-        self.enforce_traffic_rules()
         if intervention:
             frozen_vehicles = self.identify_frozen_vehicles(intervention, pre_step_causals)
             # Update binary intervention dictionary
@@ -399,7 +397,10 @@ class Gridworld:
                 if vehicle.speed != 0:
                     dx, dy = vehicle.predict_next_position()
                     if self.is_cell_free(dx, dy):
-                        intervention[f'{vehicle.__class__.__name__.lower()}_{vehicle.color}_position'] = 1
+                        x_changed = dx != vehicle.x
+                        y_changed = dy != vehicle.y
+                        intervention[f'{vehicle.__class__.__name__.lower()}_{vehicle.color}_position_x'] = x_changed
+                        intervention[f'{vehicle.__class__.__name__.lower()}_{vehicle.color}_position_y'] = y_changed
                         vehicle.set_speed(0)
             # If we moved an obstacle to a position that a vehicle would have moved to, we need to update the intervention dictionary
             for key, value in intervention.items():
@@ -416,8 +417,16 @@ class Gridworld:
                                 if vehicle.speed != 0:
                                     dx, dy = vehicle.predict_next_position()
                                     if (dx, dy) == (obstacle.x, obstacle.y):
-                                        intervention[f'vehicle_{vehicle.color}_position'] = 1
+                                        x_changed = dx != vehicle.x
+                                        y_changed = dy != vehicle.y
+                                        intervention[f'vehicle_{vehicle.color}_position_x'] = x_changed
+                                        intervention[f'vehicle_{vehicle.color}_position_y'] = y_changed
                                 break
+            non_frozen_entities = [entity for entity in self.entities if entity not in frozen_vehicles]
+            # Enforce traffic rules
+            self.enforce_traffic_rules(non_frozen_entities)
+        else:
+            self.enforce_traffic_rules()
         # self.randomly_change_car_orientation()
         # Temporary structure to store entity movements
         movements = []
@@ -606,8 +615,10 @@ class Gridworld:
         Returns:
             tuple: A tuple containing the action code and a dictionary of binary interventions applied.
         """
-        causals = self.get_causals()
-        binary_interventions = {key: 0 for key in causals.keys()}  # Use dictionary for binary interventions
+        # causals = self.get_causals()
+
+        flattened_causals = self.get_flattened_causals()
+        binary_interventions = {key: 0 for key in flattened_causals.keys()}  # Use dictionary for binary interventions
         action_code = (-1, -1, -1)
         # Define the action mapping
         ACTION_MAPPING = {'turn': 1, 'change_state': 2, 'move_to': 3}
@@ -633,28 +644,34 @@ class Gridworld:
                     if possible_moves:
                         new_x, new_y = random.choice(possible_moves)
                         action_code = (obstacle.x, obstacle.y, ACTION_MAPPING['move_to'])
+                        x_changed = new_x != obstacle.x
+                        y_changed = new_y != obstacle.y
                         self.intervene(obstacle, 'move_to', x=new_x, y=new_y)
-                        binary_interventions[f'obstacle_{obstacle.color}_position'] = 1
+                        # binary_interventions[f'obstacle_{obstacle.color}_position'] = 1
+                        binary_interventions[f'obstacle_{obstacle.color}_position_x'] = x_changed
+                        binary_interventions[f'obstacle_{obstacle.color}_position_y'] = y_changed
                 else:
                     if random.random() < 0.3:
                         # Turn the car
-                        current_orientation = entity.orientation
-                        new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
-                        new_orientation = random.choice(new_orientation_choices)
-                        self.intervene(entity, 'turn', new_orientation=new_orientation)
-                        binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
-                        action_code = (entity.x, entity.y, ACTION_MAPPING['turn'])
+                        # current_orientation = entity.orientation
+                        # new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
+                        # new_orientation = random.choice(new_orientation_choices)
+                        # self.intervene(entity, 'turn', new_orientation=new_orientation)
+                        # binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
+                        # action_code = (entity.x, entity.y, ACTION_MAPPING['turn'])
+                        pass
                     else:
                         # Do nothing
                         pass
             else:
-                # Turn the car
-                current_orientation = entity.orientation
-                new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
-                new_orientation = random.choice(new_orientation_choices)
-                self.intervene(entity, 'turn', new_orientation=new_orientation)
-                binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
-                action_code = (entity.x, entity.y, ACTION_MAPPING['turn'])
+                # # Turn the car
+                # current_orientation = entity.orientation
+                # new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
+                # new_orientation = random.choice(new_orientation_choices)
+                # self.intervene(entity, 'turn', new_orientation=new_orientation)
+                # binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
+                # action_code = (entity.x, entity.y, ACTION_MAPPING['turn'])
+                pass
         if isinstance(entity, TrafficLight):
             # Change the state of the traffic light
             self.intervene(entity, 'change_state')
@@ -666,8 +683,12 @@ class Gridworld:
             if possible_moves:
                 new_x, new_y = random.choice(possible_moves)
                 action_code = (entity.x, entity.y, ACTION_MAPPING['move_to'])
+                x_changed = new_x != entity.x
+                y_changed = new_y != entity.y
                 self.intervene(entity, 'move_to', x=new_x, y=new_y)
-                binary_interventions[f'obstacle_{entity.color}_position'] = 1
+                # binary_interventions[f'obstacle_{entity.color}_position'] = 1
+                binary_interventions[f'obstacle_{entity.color}_position_x'] = x_changed
+                binary_interventions[f'obstacle_{entity.color}_position_y'] = y_changed
         description = f"You intervened on a {entity_type}_{entity.color} at ({entity.x}, {entity.y}) with action {action_code}."
         return action_code, binary_interventions
 
@@ -705,8 +726,13 @@ class Gridworld:
             entity2.set_speed(0)
             print(f"Collision between {entity1.entity_type} and {entity2.entity_type} at ({entity1.x}, {entity1.y})")
 
-    def enforce_traffic_rules(self):
-        for position, entities in list(self.entity_map.items()):
+    def enforce_traffic_rules(self, entities=None):
+        if not entities:
+            for position, entities in list(self.entity_map.items()):
+                for entity in entities:
+                    if isinstance(entity, Vehicle):
+                        self.check_traffic_light(entity)
+        else:
             for entity in entities:
                 if isinstance(entity, Vehicle):
                     self.check_traffic_light(entity)
@@ -826,17 +852,20 @@ class Gridworld:
         car_colors_iter = cycle(car_colors)
         light_colors_iter = cycle(light_colors)
         boulder_colors_iter = cycle(boulder_colors)
-
+        cars_used = 0
         for (light_x, light_y, light_orientation) in fixed_light_positions:
             light_color = next(light_colors_iter)
             light = TrafficLight(light_x, light_y, 'red', light_color, light_orientation, frequency=(100, 1))
             self.add_entity(light)
-
+            
+            if cars_used >= num_cars:
+                break
             car_orientation = self.get_opposite_orientation(light_orientation)
             car_x, car_y = self.calculate_light_position(light_x, light_y, light_orientation, min_dist=x_percent, grid_size=grid_size)
             car_color = next(car_colors_iter)
             vehicle = Vehicle(car_x, car_y, car_color, size=1, orientation=car_orientation, speed=1)
             self.add_entity(vehicle)
+            cars_used += 1
 
         for _ in range(num_cars - len(fixed_light_positions)):
             orientation = random.choice(['up', 'down', 'left', 'right'])
@@ -910,12 +939,24 @@ class Gridworld:
                     if not are_light_positions_fixed:
                         causal_dict[f'{base_key}_orientation'] = entity.orientation
                 else:
-                    causal_dict[f'{base_key}_orientation'] = entity.orientation
+                    pass
+                    # causal_dict[f'{base_key}_orientation'] = entity.orientation
             # causal_dict[f'{base_key}_color'] = entity.color
             if isinstance(entity, TrafficLight):
                 causal_dict[f'{base_key}_state'] = entity.state
         # If traffic light positions are fixed, the light position and orientation are not causal variables
         return causal_dict
+    
+    def get_flattened_causals(self):
+        causals = self.get_causals()
+        flattened_causals = {}
+        for key, value in causals.items():
+            if 'position' in key:
+                flattened_causals[f'{key}_x'] = value[0]
+                flattened_causals[f'{key}_y'] = value[1]
+            else:
+                flattened_causals[key] = value
+        return flattened_causals
 
     def get_causal_vector(self, are_light_positions_fixed=True):
         """
@@ -967,15 +1008,15 @@ class Gridworld:
         return causal_dict
 
 
-    def causal_vector_to_debug_dict(gridworld, causal_vector):
+    def causal_vector_to_debug_dict(causal_keys, causal_vector):
         """
         Inverse the causal vector representation to a dictionary of causal variables and their values
         to the flattened representation for debugging
         """
-        causals = gridworld.get_causals()
+        # causals = gridworld.get_causals()
         debug_dict = {}
         i = 0
-        for key in sorted(causals.keys()):
+        for key in sorted(causal_keys):
             if 'position' in key:
                 # Separate entries for x and y positions
                 debug_dict[f'{key}_x'] = causal_vector[i]
@@ -992,7 +1033,7 @@ class Gridworld:
         return debug_dict
         
     @staticmethod
-    def interventions_to_binary_vector(interventions, causals):
+    def interventions_to_binary_vector(interventions, pre_intervention_causals, pre_step_causals, post_step_causals):
         binary_vector = []
         for key in sorted(causals.keys()):
             if 'position' in key:
@@ -1001,7 +1042,9 @@ class Gridworld:
                 intervened = f'{entity_key}_position' in interventions and interventions[f'{entity_key}_position'] == 1
 
                 # If position was intervened, set both x and y to 1
-                binary_vector.extend([1, 1] if intervened else [0, 0])
+                # binary_vector.extend([1, 1] if intervened else [0, 0])
+                # If position was intervened, set x to 1 or y to 1 depending on the intervention TODO
+                
             else:
                 # For other types of interventions (like orientation or state)
                 intervened = key in interventions and interventions[key] == 1
@@ -1121,11 +1164,16 @@ if __name__ == '__main__':
         action, intervention = gridworld.semi_random_intervention()
         pre_step_causals = gridworld.get_causals()
         if not pre_intervention_step:
-            gridworld.step(intervention)
+            gridworld.step(intervention, pre_step_causals)
         
         # Append action and intervention information
         actions.append(action)
-        interventions.append(gridworld.interventions_to_binary_vector(intervention, gridworld.get_causals()))
+        if pre_intervention_step:
+            # interventions.append(gridworld.interventions_to_binary_vector(intervention, pre_intervention_causals, pre_step_causals, gridworld.get_causals()))
+            interventions.append([intervention[key] for key in sorted(intervention.keys())])
+        else:
+            pass
+            # TODO
 
         # Append causal information
         causals.append(gridworld.get_causal_vector(are_light_positions_fixed=True))
