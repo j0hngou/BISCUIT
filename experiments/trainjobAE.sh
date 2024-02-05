@@ -19,14 +19,14 @@ eval "$(conda shell.bash hook)"
 conda activate biscuit
 
 #python train_nf.py --data_dir /scratch-shared/gkounto/ithor --num_latents 40
-python train_ae.py --data_dir /home/gkounto/BISCUIT/data_generation/data/gridworld_small/ \
+python train_ae.py --data_dir /home/gkounto/BISCUIT/data_generation/data/gridworld_simplified/ \
                    --batch_size 64 \
                    --c_hid 64 \
-                   --lr 2e-4 \
-                   --warmup 1000 \
-                   --num_latents 60 \
+                   --lr 5e-4 \
+                   --warmup 100 \
+                   --num_latents 20 \
                    --cluster \
-                   --regularizer_weight 4e-6 \
+                   --regularizer_weight 1e-5 \
                    --max_epochs 200 \
                    --seed 42 \
                    --use_coordconv

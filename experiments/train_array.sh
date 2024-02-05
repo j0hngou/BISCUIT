@@ -2,9 +2,9 @@
 
 #SBATCH --job-name=QER
 #SBATCH -p gpu  # Partition to submit to
-#SBATCH -t 0-23:00         # Runtime in D-HH:MM, minimum of 10 minutes
+#SBATCH -t 0-03:00         # Runtime in D-HH:MM, minimum of 10 minutes
 #SBATCH -c 8              # Number of cores (-c)
-#SBATCH --array=1-4
+#SBATCH --array=1-7
 #SBATCH --gres=gpu:1                # Number of cores (-c)
 #SBATCH --mem=120000           # Memory pool for all cores (see also --mem-per-cpu)
 #SBATCH --ntasks=1

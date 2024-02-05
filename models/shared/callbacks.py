@@ -436,6 +436,11 @@ class CorrelationMetricsLogCallback(pl.Callback):
                      tvalues[:, 9:10], tvalues[:, 10:12].mean(dim=-1, keepdims=True), tvalues[:, 12:13],
                      tvalues[:, 13:15].mean(dim=-1, keepdims=True), tvalues[:, 15:16],
                         tvalues[:, 16:18].mean(dim=-1, keepdims=True)], dim=-1).abs()
+            # elif values.shape[1] == 5:
+            #     tvalues = torch.from_numpy(values).abs()
+                # tvalues = torch.cat(
+                #     [tvalues[:, :2].mean(dim=-1, keepdims=True),
+                #      tvalues[: 2:]], dim=-1).abs()
                 row_ind, col_ind = linear_sum_assignment(tvalues, maximize=True)
                 permuted_tvalues = tvalues[:, col_ind]
                 permuted_tvalues = permuted_tvalues[row_ind, :]
@@ -593,8 +598,8 @@ class InteractionVisualizationCallback(pl.Callback):
         true_intv = torch.cat(all_true_intvs, dim=0).long()
         pred_intv = torch.cat(all_pred_intvs, dim=0)
         # perfect interventions
-        pred_intv = torch.zeros_like(pred_intv)
-        pred_intv[:, :true_intv.shape[1]] = true_intv
+        # pred_intv = torch.zeros_like(pred_intv)
+        # pred_intv[:, :true_intv.shape[1]] = true_intv
         # pred_intv = true_intv.expand(-1, pred_intv.shape[1])
         num_true_targets = true_intv.shape[1]
         num_pred_targets = pred_intv.shape[1]
