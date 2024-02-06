@@ -502,16 +502,20 @@ class PermutationCorrelationMetricsLogCallback(CorrelationMetricsLogCallback):
             ta = torch.cat([ta[:,:6],
                             ta[:,6:].sum(dim=-1, keepdims=True)], dim=-1)
         elif isinstance(self.dataset, GridworldDataset):
-            ta = torch.cat([ta[:,:2].sum(dim=-1, keepdims=True),
-                            ta[:,2:4].sum(dim=-1, keepdims=True),
-                            ta[:,4:6].sum(dim=-1, keepdims=True),
-                            ta[:,6:9],
-                            ta[:,9:10],
-                            ta[:,10:12].sum(dim=-1, keepdims=True),
-                            ta[:,12:13],
-                            ta[:,13:15].sum(dim=-1, keepdims=True),
-                            ta[:,15:16],
-                            ta[:,16:18].sum(dim=-1, keepdims=True)], dim=-1)
+            if ta.shape[1] == 5:
+                ta = torch.cat([ta[:,:2].sum(dim=-1, keepdims=True),
+                                ta[:,2:]], dim=-1)
+            else:
+                ta = torch.cat([ta[:,:2].sum(dim=-1, keepdims=true),
+                                ta[:,2:4].sum(dim=-1, keepdims=true),
+                                ta[:,4:6].sum(dim=-1, keepdims=true),
+                                ta[:,6:9],
+                                ta[:,9:10],
+                                ta[:,10:12].sum(dim=-1, keepdims=true),
+                                ta[:,12:13],
+                                ta[:,13:15].sum(dim=-1, keepdims=true),
+                                ta[:,15:16],
+                                ta[:,16:18].sum(dim=-1, keepdims=true)], dim=-1)
         if trainer.current_epoch == 0:
             ta[:,0] = 1
             ta[:,1:] = 0

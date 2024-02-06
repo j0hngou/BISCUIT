@@ -261,8 +261,9 @@ class InteractionTransitionPrior(nn.Module):
             # action = torch.zeros_like(action)
             # action[:, :intv_targets.shape[-1], :] = intv_targets.transpose(-1, -2)
             action = action.clone()
-            action[..., :targets.shape[-1], :] = (intv_targets * 2 - 1).unsqueeze(dim=-1)
-            action[..., targets.shape[-1]:, :] = 0.
+            # intv_targets = intv_targets.squeeze(1)
+            action[..., :intv_targets.shape[-1], :] = intv_targets.transpose(-1, -2) * 2 - 1
+            action[..., intv_targets.shape[-1]:, :] = 0.
 
         action_feats = self.action_layer(action, detach_weights=detach_weights)
         action_feats = action_feats.unsqueeze(dim=1)
