@@ -895,7 +895,7 @@ class GridworldDataset(Dataset):
         self.subsample_percentage = subsample_percentage if not debug_data else 0.05
         self.subsample_chunk = subsample_chunk if not debug_data else 0
         # Store the file paths instead of loading all data
-        self.data_files = sorted(glob(os.path.join(data_folder, f'{split}', '*.npz')))
+        self.data_files = sorted(glob(os.path.join(data_folder, f'{split}', '*.npz')), key=lambda x: int(x.split('_')[-1].rstrip('.npz')))
         self.data_files = self.data_files[int(self.subsample_chunk * self.subsample_percentage * len(self.data_files)):int((self.subsample_chunk + 1) * self.subsample_percentage * len(self.data_files))]
         print(len(self.data_files))
         self.indices = range(len(self.data_files) * (seq_len - 1))
@@ -1055,9 +1055,9 @@ class GridworldDataset(Dataset):
         returns = []
 
         img_pair = self.imgs[idx:idx+self.seq_len]
-        rob = self.robot_state[idx+1:idx+self.seq_len]
+        rob = self.robot_state[idx:idx+self.seq_len - 1]
         lat = self.latent_state[idx:idx+self.seq_len]
-        target = self.targets[idx+1:idx+self.seq_len]
+        target = self.targets[idx:idx+self.seq_len - 1]
 
         if self.single_image:
             img_pair = img_pair[0]

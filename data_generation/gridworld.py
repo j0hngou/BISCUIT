@@ -6,7 +6,7 @@ from collections import defaultdict
 from itertools import cycle
 import webcolors
 import os
-from sprite_maker import make_sprites
+# from sprite_maker import make_sprites
 
 seed = 2
 

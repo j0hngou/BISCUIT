@@ -70,16 +70,18 @@ def load_datasets(args):
         dataset_args['try_encodings'] = args.try_encodings
     if hasattr(args, 'debug_data'):
         dataset_args['debug_data'] = args.debug_data
+    if hasattr(args, 'perfect_intv'):
+        perfect_intv = args.perfect_intv
     train_dataset = DataClass(
-        data_folder=args.data_dir, split='train', return_targets=True, single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=args.subsample_percentage, **dataset_args)
+        data_folder=args.data_dir, split='train', return_targets=True if perfect_intv else False, single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=args.subsample_percentage, **dataset_args)
     val_dataset = DataClass(
-         data_folder=args.data_dir, split='val_indep', return_targets=True, single_image=True, return_latents=True, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=1.0, **dataset_args)
+         data_folder=args.data_dir, split='val_indep', return_targets=True if perfect_intv else False, single_image=True, return_latents=True, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=1.0, **dataset_args)
     val_seq_dataset = DataClass(
-        data_folder=args.data_dir, split='val', return_targets=True, single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=1.0, **dataset_args)
+        data_folder=args.data_dir, split='val', return_targets=True if perfect_intv else False, single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=1.0, **dataset_args)
     test_dataset = DataClass(
-          data_folder=args.data_dir, split='test_indep', return_targets=True, single_image=True, return_latents=True, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=1.0, **dataset_args)
+          data_folder=args.data_dir, split='test_indep', return_targets=True if perfect_intv else False, single_image=True, return_latents=True, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=1.0, **dataset_args)
     test_seq_dataset = DataClass(
-        data_folder=args.data_dir, split='test', return_targets=True, single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=1.0, **dataset_args)
+        data_folder=args.data_dir, split='test', return_targets=True if perfect_intv else False, single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=1.0, **dataset_args)
     train_loader = data.DataLoader(train_dataset, batch_size=args.batch_size,
                                    shuffle=True, pin_memory=True, drop_last=True, num_workers=args.num_workers)
     val_seq_loader = data.DataLoader(val_seq_dataset, batch_size=args.batch_size,

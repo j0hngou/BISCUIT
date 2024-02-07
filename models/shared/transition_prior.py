@@ -370,7 +370,7 @@ class InteractionTransitionPrior(nn.Module):
 
         return loss
     
-    def sample(self, z_t, action, num_samples=1, tokenized_description=None, **kwargs):
+    def sample(self, z_t, action, num_samples=1, tokenized_description=None, intv_targets=None, **kwargs):
         """
         Sample from the prior distribution p(z^t1|z^t,I^t+1) in BISCUIT.
 
@@ -384,7 +384,7 @@ class InteractionTransitionPrior(nn.Module):
                       Number of samples to draw from the prior
         """
         extra_params = self._prepare_prior_input()
-        prior_params, extra_info = self._get_prior_params(z_t, action=action, tokenized_description=tokenized_description, **extra_params)
+        prior_params, extra_info = self._get_prior_params(z_t, action=action, tokenized_description=tokenized_description, intv_targets=intv_targets, **extra_params)
         prior_mean, prior_logstd = prior_params
         z_t1 = torch.randn(z_t.shape[0], num_samples, self.num_latents, device=z_t.device)
         z_t1 = z_t1 * torch.exp(prior_logstd) + prior_mean

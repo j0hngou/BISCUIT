@@ -61,6 +61,7 @@ if __name__ == '__main__':
     parser.add_argument('--subsample_percentage', type=float, default=1.0)
     parser.add_argument('--subsample_chunk', type=int, default=1)
     parser.add_argument('--debug_data', default=False, action="store_true")
+    parser.add_argument('--perfect_intv', default=False, action="store_true")
 
 
     args = parser.parse_args()
@@ -77,7 +78,7 @@ if __name__ == '__main__':
     model_args['text'] = args.text
     model_class = BISCUITNF
     textornot = 'text' if args.text else 'notext'
-    logger_name = f'BISCUITNF_{args.num_latents}l_{datasets["train"].num_vars()}b_{args.c_hid}hid_{data_name}_{textornot}_ss{args.subsample_percentage}_sc{args.subsample_chunk}_perfectintv'
+    logger_name = f'BISCUITNF_{args.num_latents}l_{datasets["train"].num_vars()}b_{args.c_hid}hid_{data_name}_{textornot}_ss{args.subsample_percentage}_sc{args.subsample_chunk}_{"perfect_intv" if args.perfect_intv else "est_intv"}'
     args_logger_name = model_args.pop('logger_name')
     if len(args_logger_name) > 0:
         logger_name += '/' + args_logger_name

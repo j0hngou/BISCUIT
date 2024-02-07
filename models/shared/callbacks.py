@@ -770,3 +770,46 @@ class InteractionVisualizationCallback(pl.Callback):
         self.trial.report(score, step=epoch)
         if self.trial.should_prune():
             raise optuna.TrialPruned(f'Trial was pruned at epoch {epoch}')
+
+# class VisualizeSamples(pl.Callback):
+#     """
+#     Callback that visualizes the top and bottom N samples based on their validation negative log likelihood.
+#     """
+#     def __init__(self, val_loader, num_samples=5, prefix='', trial=None):
+#         super().__init__()
+#         self.val_loader = val_loader
+#         self.num_samples = num_samples
+#         self.prefix = prefix
+#         self.trial = trial
+
+#     @torch.no_grad()
+#     def on_validation_epoch_end(self, trainer, pl_module):
+#         is_test = self.prefix.startswith('test')
+#         all_nlls = []
+#         all_imgs = []
+#         for batch in self.val_loader:
+#             img, *_, nll = batch
+#             img = img.to(pl_module.device)
+#             nll = nll.to(pl_module.device)
+#             all_nlls.append(nll)
+#             all_imgs.append(img)
+#         nlls = torch.cat(all_nlls, dim=0)
+#         imgs = torch.cat(all_imgs, dim=0)
+#         top_nlls, top_inds = nlls.topk(self.num_samples, largest=False)
+#         bottom_nlls, bottom_inds = nlls.topk(self.num_samples, largest=True)
+#         top_imgs = imgs[top_inds]
+#         bottom_imgs = imgs[bottom_inds]
+
+#         if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+#             os.makedirs(os.path.join(trainer.logger.log_dir, 'top_bottom_samples'), exist_ok=True)
+#         else:
+#             os.makedirs(os.path.join(wandb.run.dir, 'top_bottom_samples'), exist_ok=True)
+#         for i in range(self.num_samples):
+#             top_img = top_imgs[i].cpu().numpy().transpose(1, 2, 0)
+#             bottom_img = bottom_imgs[i].cpu().numpy().transpose(1, 2, 0)
+#             if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+#                 plt.imsave(os.path.join(trainer.logger.log_dir, 'top_bottom_samples', f'{self.prefix}top_sample_{i}.png'), top_img)
+#                 plt.imsave(os.path.join(trainer.logger.log_dir, 'top_bottom_samples', f'{self.prefix}bottom_sample_{i}.png'), bottom_img)
+#             else:
+#                 wandb.log({f'{self.prefix}top_sample_{i}': wandb.Image(top_img)}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+#                 wandb.log({f'{self.prefix}bottom_sample_{i}': wandb.Image(bottom_img)}, step=trainer
