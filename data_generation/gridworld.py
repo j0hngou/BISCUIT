@@ -788,10 +788,13 @@ class Gridworld:
     def is_cell_free(self, x, y):
         return not self.entity_map[(x, y)]
 
+    def is_position_within_bounds(self, x, y):
+        return 0 <= x < self.width and 0 <= y < self.height
+
     def get_free_cells_around_entity(self, entity):
         x, y = entity.x, entity.y
         possible_moves = [(x-1, y), (x+1, y), (x, y-1), (x, y+1)]
-        possible_moves = [(x, y) for x, y in possible_moves if self.is_cell_free(x, y)]
+        possible_moves = [(x, y) for x, y in possible_moves if (self.is_cell_free(x, y) and self.is_position_within_bounds(x, y))]
         return possible_moves
 
     def get_entity_at_position(self, x, y):
