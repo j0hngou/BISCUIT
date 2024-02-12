@@ -23,6 +23,133 @@ from models.shared.causal_encoder import CausalEncoder
 from experiments.datasets import iTHORDataset, CausalWorldDataset, GridworldDataset
 import wandb
 
+from torchvision.utils import make_grid
+
+class NextStepCallback(pl.Callback):
+    def __init__(self, dataset, every_n_epochs=1, threshold=0.001, num_samples=5):
+        super().__init__()
+        self.every_n_epochs = every_n_epochs
+        self.threshold = threshold  # Difference threshold for including the exclamation mark image
+        self.num_samples = num_samples  # Number of samples to log
+        self.indices = np.random.choice(len(dataset), num_samples, replace=False)
+        self.dataset = dataset
+
+    @torch.no_grad()
+    def on_validation_epoch_end(self, trainer, pl_module):
+        if (trainer.current_epoch + 1) % self.every_n_epochs != 0:
+            return
+
+        
+        # # Get a batch of data
+        # batch = next(iter(trainer.val_dataloaders))
+        # # batch = batch[:self.num_samples]  # Limit the number of samples to log
+        # batch = [x[:self.num_samples] for x in batch]
+        # for i, frame_seq in enumerate(zip(*batch)):
+        batch = [self.dataset[i] for i in self.indices]
+        for i, frame_seq in enumerate(batch):
+            image_latents = torch.tensor(frame_seq[0][0], device=pl_module.device)
+            image = pl_module.autoencoder.decoder(image_latents[None])[0]
+            image = (image + 1.0) / 2.0
+            action = torch.tensor(frame_seq[1], device=pl_module.device).squeeze()
+            gt_image_latents = torch.tensor(frame_seq[0][1], device=pl_module.device)
+            gt_image = pl_module.autoencoder.decoder(gt_image_latents[None])[0]
+            gt_image = (gt_image + 1.0) / 2.0  # Convert to 0-1 range
+
+            # Generate the new image and latents with the model
+            new_image, new_latents = self.next_step_prediction(
+                model=pl_module,
+                image=image,
+                action=action,
+            )
+
+            # Calculate difference to determine if the exclamation mark image should be included
+            difference = torch.abs(new_image - gt_image).mean()
+            include_exclamation_mark = difference > self.threshold
+
+            # Prepare the images for the grid
+            images_to_log = [
+                image.cpu(),  # Previous Frame
+                new_image.cpu(),  # New Sample
+                gt_image.cpu()  # Ground Truth
+            ]
+
+            # Highlight the action location on a copy of the previous frame image
+            action_image = image.clone()
+            # action_image = (action_image + 1.0) / 2.0  # Convert to 0-1 range
+            pixel_x = int(action[0].item() * (action_image.shape[1] - 1))
+            pixel_y = int(action[1].item() * (action_image.shape[2] - 1))
+            action_image[:, max(0, pixel_y-5):pixel_y+6, max(0, pixel_x-5):pixel_x+6] = 1.0  # Assuming action is normalized
+            images_to_log.insert(1, action_image.cpu())  # Insert action image after the previous frame
+
+            # Optionally add an exclamation mark image if there's a notable difference
+            if include_exclamation_mark:
+                exclamation_mark_image = self.create_exclamation_mark_image().transpose(2,0,1)
+                exclamation_mark_image = torch.from_numpy(exclamation_mark_image).float()
+                images_to_log.append(exclamation_mark_image)
+
+            # Convert list of tensors to a grid
+            images_grid = make_grid(images_to_log, nrow=len(images_to_log), pad_value=1)  # Use pad_value to add space between
+
+            # Log the image grid to wandb
+            wandb.log({"image_grid": [wandb.Image(images_grid, caption="Frame Sequence")]}, step=trainer.global_step)
+
+    
+    def create_exclamation_mark_image(self, size=256, background_color=(1, 1, 1), mark_color=(1, 0, 0), mark_thickness=10, mark_height=100, dot_radius=10):
+        """
+        Creates an image with a red exclamation mark in the center on a white background.
+
+        Parameters:
+        - size (int): The size of the image (width and height). Default is 256.
+        - background_color (tuple): The RGB color of the background in the range 0 to 1. Default is white.
+        - mark_color (tuple): The RGB color of the exclamation mark in the range 0 to 1. Default is red.
+        - mark_thickness (int): The thickness of the line part of the exclamation mark. Default is 10.
+        - mark_height (int): The height of the line part of the exclamation mark. Default is 100.
+        - dot_radius (int): The radius of the dot part of the exclamation mark. Default is 10.
+
+        Returns:
+        - numpy.ndarray: The generated image as a NumPy array.
+        """
+        # Create a size x size x 3 array with the background color
+        image = np.ones((size, size, 3)) * np.array(background_color)
+
+        # Define the center position
+        center_x, center_y = size // 2, size // 2
+
+        # Draw the line part of the exclamation mark
+        for x in range(center_x - mark_thickness // 2, center_x + mark_thickness // 2):
+            for y in range(center_y - mark_height // 2, center_y + mark_height // 2 - dot_radius * 2):
+                image[y, x] = mark_color
+
+        # Draw the dot part of the exclamation mark
+        for x in range(image.shape[1]):
+            for y in range(image.shape[0]):
+                if (x - center_x) ** 2 + (y - (center_y + mark_height // 2 + dot_radius)) ** 2 <= dot_radius ** 2:
+                    image[y, x] = mark_color
+
+        return image
+
+
+    @torch.no_grad()
+    def next_step_prediction(
+            self,
+            model: pl.LightningModule,
+            image: torch.Tensor,
+            action: torch.Tensor,
+            latents: torch.Tensor = None,
+            intv_targets: torch.Tensor = None,
+            N: int = 8
+        ) -> tuple[torch.Tensor, torch.Tensor]:
+        if latents is None:
+            input_image = (image * 2.0) - 1.0
+            latents = model.autoencoder.encoder(input_image[None])
+            latents, _ = model.flow.forward(latents)
+        new_latents, _ = model.prior_t1.sample(latents, action[None], num_samples=1, intv_targets=intv_targets)
+        new_latents = new_latents.squeeze(1)
+        new_encodings = model.flow.reverse(new_latents)
+        new_image = model.autoencoder.decoder(new_encodings)[0]
+        new_image = (new_image + 1.0) / 2.0
+        return new_image, new_latents
+
 
 class ImageLogCallback(pl.Callback):
     """ Callback for creating visualizations for logging """

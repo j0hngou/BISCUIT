@@ -85,7 +85,9 @@ if __name__ == '__main__':
 
     callback_kwargs = {'dataset': datasets['train'], 
                        'correlation_dataset': datasets['val'],
-                       'correlation_test_dataset': datasets['test']}
+                       'correlation_test_dataset': datasets['test'],
+                       'next_step_dataset': datasets['val_seq'],
+    }
     if model_class == BISCUITNF and 'action' in data_loaders:
         callback_kwargs['action_data_loader'] = data_loaders['action']
 

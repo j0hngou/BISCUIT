@@ -1,0 +1,137 @@
+{
+    "os": "Linux-6.2.0-39-generic-x86_64-with-glibc2.37",
+    "python": "3.11.5",
+    "heartbeatAt": "2023-12-20T19:30:42.194376",
+    "startedAt": "2023-12-20T19:30:41.290727",
+    "docker": null,
+    "cuda": null,
+    "args": [
+        "--data_dir",
+        "/home/john/PhD/BISCUIT/data_generation/data/gridworld",
+        "--num_latents",
+        "40",
+        "--batch_size",
+        "32",
+        "--subsample_percentage",
+        "0.05"
+    ],
+    "state": "running",
+    "program": "/home/john/PhD/BISCUIT/experiments/train_ae.py",
+    "codePathLocal": "train_ae.py",
+    "codePath": "experiments/train_ae.py",
+    "git": {
+        "remote": "git@github.com:j0hngou/BISCUIT.git",
+        "commit": "96988c2745d2364258070abe2b59d6ae2407d881"
+    },
+    "email": "johngoudouras@gmail.com",
+    "root": "/home/john/PhD/BISCUIT",
+    "host": "john-ThinkPad-P1-Gen-4i",
+    "username": "john",
+    "executable": "/home/john/miniconda3/envs/biscuit/bin/python",
+    "cpu_count": 8,
+    "cpu_count_logical": 16,
+    "cpu_freq": {
+        "current": 3978.1187499999996,
+        "min": 800.0,
+        "max": 4925.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 3736.119,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 4043.65,
+            "min": 800.0,
+            "max": 4900.0
+        },
+        {
+            "current": 3641.528,
+            "min": 800.0,
+            "max": 4900.0
+        },
+        {
+            "current": 4058.647,
+            "min": 800.0,
+            "max": 4900.0
+        },
+        {
+            "current": 3443.227,
+            "min": 800.0,
+            "max": 4900.0
+        },
+        {
+            "current": 4115.423,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 3997.652,
+            "min": 800.0,
+            "max": 4900.0
+        },
+        {
+            "current": 3327.506,
+            "min": 800.0,
+            "max": 4900.0
+        },
+        {
+            "current": 4011.318,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 4117.285,
+            "min": 800.0,
+            "max": 4900.0
+        },
+        {
+            "current": 3826.912,
+            "min": 800.0,
+            "max": 4900.0
+        },
+        {
+            "current": 4110.163,
+            "min": 800.0,
+            "max": 4900.0
+        },
+        {
+            "current": 3278.184,
+            "min": 800.0,
+            "max": 4900.0
+        },
+        {
+            "current": 4105.404,
+            "min": 800.0,
+            "max": 5000.0
+        },
+        {
+            "current": 3701.339,
+            "min": 800.0,
+            "max": 4900.0
+        },
+        {
+            "current": 3775.965,
+            "min": 800.0,
+            "max": 4900.0
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 777.2612762451172,
+            "used": 352.29001235961914
+        }
+    },
+    "gpu": "NVIDIA RTX A5000 Laptop GPU",
+    "gpu_count": 1,
+    "gpu_devices": [
+        {
+            "name": "NVIDIA RTX A5000 Laptop GPU",
+            "memory_total": 17179869184
+        }
+    ],
+    "memory": {
+        "total": 31.04913330078125
+    }
+}

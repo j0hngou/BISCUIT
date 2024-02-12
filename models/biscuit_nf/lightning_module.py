@@ -4,7 +4,7 @@ from torch.optim import AdamW
 
 import sys
 sys.path.append('../')
-from models.shared import get_act_fn, ImageLogCallback
+from models.shared import get_act_fn, ImageLogCallback, NextStepCallback
 from models.ae import Autoencoder
 from models.biscuit_vae import BISCUITVAE
 from models.shared import AutoregNormalizingFlow
@@ -147,11 +147,12 @@ class BISCUITNF(BISCUITVAE):
         return [optimizer], [{'scheduler': lr_scheduler, 'interval': 'step'}]
 
     @staticmethod
-    def get_callbacks(exmp_inputs=None, dataset=None, cluster=False, correlation_dataset=False, correlation_test_dataset=None, action_data_loader=None, **kwargs):
+    def get_callbacks(exmp_inputs=None, dataset=None, cluster=False, next_step_dataset=False, correlation_dataset=False, correlation_test_dataset=None, action_data_loader=None, **kwargs):
         img_callback = ImageLogCallback([None, None], dataset, every_n_epochs=10, cluster=cluster)
         # Create learning rate callback
         lr_callback = LearningRateMonitor('step')
-        callbacks = [lr_callback, img_callback]
+        next_step_callback = NextStepCallback(dataset=next_step_dataset, every_n_epochs=1)
+        callbacks = [lr_callback, img_callback, next_step_callback]
         corr_callback = PermutationCorrelationMetricsLogCallback(correlation_dataset, 
                                                                  cluster=cluster, 
                                                                  test_dataset=correlation_test_dataset)

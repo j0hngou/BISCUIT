@@ -898,14 +898,19 @@ class GridworldDataset(Dataset):
         self.data_files = sorted(glob(os.path.join(data_folder, f'{split}', '*.npz')), key=lambda x: int(x.split('_')[-1].rstrip('.npz')))
         self.data_files = self.data_files[int(self.subsample_chunk * self.subsample_percentage * len(self.data_files)):int((self.subsample_chunk + 1) * self.subsample_percentage * len(self.data_files))]
         print(len(self.data_files))
-        self.indices = range(len(self.data_files) * (seq_len - 1))
-        self.indices_per_file = episode_length
+        # self.indices = self.calculate_indices() #range(len(self.data_files) * (seq_len - 1))
+
+        
         # Load metadata
         self.load_metadata(data_folder, split)
         self.create_var_info()
         
         # Load first file to get the image size
         data_seq = np.load(self.data_files[0], allow_pickle=True)
+        self.episode_length = data_seq['frames'].shape[0]
+        self.indices_per_file = episode_length
+        self.indices = self.calculate_indices()
+
         self.imgs = data_seq['frames']
         # self.imgs = self._prepare_imgs(self.imgs)
         
@@ -915,13 +920,13 @@ class GridworldDataset(Dataset):
         # print(data)
         self.imgs = data.pop('frames')
 
-        if len(self.imgs.shape) > 4 and not triplet:
-            arange_0 = np.arange(self.imgs.shape[0], dtype=np.int32)
-            arange_1 = np.arange(start=0, stop=self.imgs.shape[1]-self.seq_len+1, dtype=np.int32)
-            self.indices = arange_1[None,:] + arange_0[:,None] * self.imgs.shape[1]
-            self.indices = np.reshape(self.indices, (-1,))
-        else:
-            self.indices = np.arange(start=0, stop=np.prod(self.imgs.shape[:2])-self.seq_len+1, dtype=np.int32)
+        # if len(self.imgs.shape) > 4 and not triplet:
+        #     arange_0 = np.arange(self.imgs.shape[0], dtype=np.int32)
+        #     arange_1 = np.arange(start=0, stop=self.imgs.shape[1]-self.seq_len+1, dtype=np.int32)
+        #     self.indices = arange_1[None,:] + arange_0[:,None] * self.imgs.shape[1]
+        #     self.indices = np.reshape(self.indices, (-1,))
+        # else:
+        #     self.indices = np.arange(start=0, stop=np.prod(self.imgs.shape[:2])-self.seq_len+1, dtype=np.int32)
         
         # self.imgs = np.reshape(self.imgs, (-1,) + self.imgs.shape[2:])
         self.imgs = torch.from_numpy(self.imgs)
@@ -938,29 +943,33 @@ class GridworldDataset(Dataset):
             self.token_type_ids = data['token_type_ids']
             self.attention_mask = data['attention_mask']
 
-    # def load_data_from_folder(self, data_folder, split):
-    #     data_folder = os.path.join(data_folder, f'{split}')
-    #     # data_files = sorted(glob(os.path.join(data_folder, '*.npz')))
-    #     data = {}
-    #     for file in tqdm(self.data_files, desc=f'Loading sequences of {self.split_name}', leave=False, total=len(self.data_files)):
-    #         data_seq = np.load(file, allow_pickle=True)
-    #         for key, val in data_seq.items():
-    #             if key not in data:
-    #                 data[key] = val
-    #             else:
-    #                 data[key] = np.concatenate([data[key], val], axis=0)
-    #     return data
-    # Okay this was stupid, static allocation and copying new arrays on every iteration is deadly slow
+    def calculate_indices(self):
+        indices = []
+        total_episodes = len(self.data_files)  # Total episodes
+        frames_per_episode = self.episode_length  # Total frames per episode, including the last frame
+        
+        for episode_idx in range(total_episodes):
+            # For each episode, calculate indices for valid starting points
+            # Ensure the last frame of an episode is not a starting index
+            for frame_idx in range(frames_per_episode - (self.seq_len - 1)):
+                global_start_idx = episode_idx * frames_per_episode + frame_idx
+                indices.append(global_start_idx)
+        return indices
 
 
     def load_data_from_folder(self, data_folder, split):
         data_folder = os.path.join(data_folder, f'{split}')
         data = {}
-        for file in tqdm(self.data_files, desc=f'Loading sequences of {self.split_name}', leave=False, total=len(self.data_files)):
+        for file in tqdm_track(self.data_files, desc=f'Loading sequences of {self.split_name}', leave=False, total=len(self.data_files)):
             data_seq = np.load(file, allow_pickle=True)
             for key, val in data_seq.items():
+                # We must append a dummy action and intervention for the last frame
+                if key == 'actions':
+                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 100], axis=0)
+                if key == 'interventions':
+                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 100], axis=0)
                 if key not in data:
-                    data[key] = [val] # Use list because of its dynamic allocation
+                    data[key] = [val]
                 else:
                     data[key].append(val)
 
@@ -968,7 +977,6 @@ class GridworldDataset(Dataset):
             data[key] = np.concatenate(data[key], axis=0)
 
         return data
-
 
     def load_metadata(self, data_folder, split):
         metadata_file = os.path.join(data_folder, f'{split}_metadata.json')
@@ -1026,7 +1034,8 @@ class GridworldDataset(Dataset):
             return imgs
 
     def __len__(self):
-        return len(self.data_files) * (self.indices_per_file if self.single_image else self.seq_len - 1)
+        # return len(self.data_files) * (self.indices_per_file if self.single_image else self.seq_len - 1)
+        return len(self.indices)
     
     def action_size(self):
         # return len(self.action_types)
@@ -1050,14 +1059,54 @@ class GridworldDataset(Dataset):
     def get_causal_var_info(self):
         return GridworldDataset.VAR_INFO
 
-    def __getitem__(self, idx):
-        idx = self.indices[idx]
-        returns = []
+    # def __getitem__(self, idx):
+    #     returns = []
 
-        img_pair = self.imgs[idx:idx+self.seq_len]
-        rob = self.robot_state[idx:idx+self.seq_len - 1]
-        lat = self.latent_state[idx:idx+self.seq_len]
-        target = self.targets[idx:idx+self.seq_len - 1]
+    #     img_pair = self.imgs[idx:idx+self.seq_len]
+    #     rob = self.robot_state[idx:idx+self.seq_len - 1]
+    #     lat = self.latent_state[idx:idx+self.seq_len]
+    #     target = self.targets[idx:idx+self.seq_len - 1]
+
+    #     if self.single_image:
+    #         img_pair = img_pair[0]
+    #         lat = lat[0]
+    #         if rob.shape[0] > 0:
+    #             rob = rob[0]
+    #         if target.shape[0] > 0:
+    #             target = target[0]
+    #     img_pair = self._prepare_imgs(img_pair)
+    #     returns = [img_pair]
+
+    #     if self.return_robot_state:
+    #         returns += [rob]
+    #     if self.return_targets:
+    #         returns += [target]
+    #     if self.return_text:
+    #         returns += [self.input_ids[idx + 1:idx+self.seq_len], self.token_type_ids[idx + 1:idx+self.seq_len], self.attention_mask[idx + 1:idx+self.seq_len]]
+    #     if self.return_latents:
+    #         returns += [lat]
+
+    #     return tuple(returns) if len(returns) > 1 else returns[0]
+
+    def __getitem__(self, idx):
+        # Use the pre-calculated index to directly access the frames and associated data
+        start_frame_idx = self.indices[idx]
+        
+        # Fetch frame or frame pair
+        img_pair = self.imgs[start_frame_idx:start_frame_idx + self.seq_len]
+        
+        # Fetch actions and interventions corresponding to the start_frame_idx
+        # Note: The action/intervention at start_frame_idx refers to the transition from start_frame_idx to start_frame_idx + 1
+        # For single_image, this still aligns since we're interested in the action leading to that frame
+        if not self.single_image or self.seq_len > 1:
+            rob = self.robot_state[start_frame_idx:start_frame_idx + self.seq_len - 1]
+            target = self.targets[start_frame_idx:start_frame_idx + self.seq_len - 1]
+        else:
+            # For single_image mode with seq_len=1, fetch the action/intervention at the index directly
+            rob = self.robot_state[start_frame_idx:start_frame_idx + 1]
+            target = self.targets[start_frame_idx:start_frame_idx + 1]
+        
+        lat = self.latent_state[start_frame_idx:start_frame_idx + self.seq_len]
 
         if self.single_image:
             img_pair = img_pair[0]
@@ -1066,71 +1115,24 @@ class GridworldDataset(Dataset):
                 rob = rob[0]
             if target.shape[0] > 0:
                 target = target[0]
+        
+        
+        # Prepare the images
         img_pair = self._prepare_imgs(img_pair)
+        
+        # Initialize the list to return, starting with the image pair
         returns = [img_pair]
-
-        if self.return_robot_state:
-            returns += [rob]
-        if self.return_targets:
-            returns += [target]
-        if self.return_text:
-            returns += [self.input_ids[idx + 1:idx+self.seq_len], self.token_type_ids[idx + 1:idx+self.seq_len], self.attention_mask[idx + 1:idx+self.seq_len]]
+        
+        # Add the additional requested data to the return list
+        if self.return_robot_state and rob is not None:
+            returns.append(rob)
+        if self.return_targets and target is not None:
+            returns.append(target)
         if self.return_latents:
-            returns += [lat]
-
+            returns.append(lat)
+        
         return tuple(returns) if len(returns) > 1 else returns[0]
-    # def __getitem__(self, idx):
-    #     if self.single_image:
-    #         # Calculate which file and which index in the file we need
-    #         file_idx = idx // self.indices_per_file
-    #         idx_within_file = idx % self.indices_per_file
-            
-    #         # Load only the specific .npz file
-    #         data_seq = np.load(self.data_files[file_idx], allow_pickle=True)
-            
-    #         # Get the specific data points
-    #         img = data_seq['frames'][idx_within_file]
-    #         img = self._prepare_imgs(torch.from_numpy(img).float())
 
-    #         # Prepare other data if requested
-    #         returns = [img]
-    #         if self.return_robot_state:
-    #             rob = data_seq['actions'][idx_within_file - 1]
-    #             returns.append(torch.from_numpy(rob).float())
-    #         if self.return_latents:
-    #             lat = data_seq['latents'][idx_within_file]
-    #             returns.append(torch.from_numpy(lat).float())
-    #         if self.return_targets:
-    #             target = data_seq['targets'][idx_within_file - 1]
-    #             returns.append(torch.from_numpy(target).float())
 
-    #         return tuple(returns) if len(returns) > 1 else returns[0]
-    #     else:
-    #         # Calculate which file and which index in the file we need for sequences
-    #         file_idx = idx // self.indices_per_file
-    #         idx_within_file = idx % self.indices_per_file
-            
-    #         # Adjust index to get a sequence
-    #         start_idx = max(idx_within_file - self.seq_len + 1, 0)
-    #         end_idx = start_idx + self.seq_len
 
-    #         # Load only the specific .npz file
-    #         data_seq = np.load(self.data_files[file_idx], allow_pickle=True)
-            
-    #         # Get the specific data points for the sequence
-    #         img_seq = data_seq['frames'][start_idx:end_idx]
-    #         img_seq = self._prepare_imgs(torch.from_numpy(img_seq).float())
 
-    #         # Prepare other data if requested
-    #         returns = [img_seq]
-    #         if self.return_robot_state:
-    #             rob_seq = data_seq['actions'][start_idx:end_idx-1]
-    #             returns.append(torch.from_numpy(rob_seq).float())
-    #         if self.return_latents:
-    #             lat_seq = data_seq['latents'][start_idx:end_idx]
-    #             returns.append(torch.from_numpy(lat_seq).float())
-    #         if self.return_targets:
-    #             target_seq = data_seq['targets'][start_idx:end_idx-1]
-    #             returns.append(torch.from_numpy(target_seq).float())
-
-    #         return tuple(returns) if len(returns) > 1 else returns[0]

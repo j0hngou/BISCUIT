@@ -1,5 +1,5 @@
 from models.shared.transition_prior import InteractionTransitionPrior, create_interaction_prior
-from models.shared.callbacks import ImageLogCallback, CorrelationMetricsLogCallback, PermutationCorrelationMetricsLogCallback, InteractionVisualizationCallback
+from models.shared.callbacks import ImageLogCallback, CorrelationMetricsLogCallback, PermutationCorrelationMetricsLogCallback, InteractionVisualizationCallback, NextStepCallback
 from models.shared.encoder_decoder import Encoder, Decoder, PositionLayer, SimpleEncoder, SimpleDecoder, VAESplit
 from models.shared.causal_encoder import CausalEncoder
 from models.shared.modules import TanhScaled, CosineWarmupScheduler, SineWarmupScheduler, MultivarLinear, MultivarLayerNorm, MultivarStableTanh, MultivarSequential, AutoregLinear, SinusoidalEncoding

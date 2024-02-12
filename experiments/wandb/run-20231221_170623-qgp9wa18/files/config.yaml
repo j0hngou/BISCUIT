@@ -1,0 +1,109 @@
+wandb_version: 1
+
+data_dir:
+  desc: null
+  value: /home/john/PhD/BISCUIT/data_generation/data/gridworld
+cluster:
+  desc: null
+  value: false
+seed:
+  desc: null
+  value: 42
+max_epochs:
+  desc: null
+  value: 200
+debug:
+  desc: null
+  value: false
+offline:
+  desc: null
+  value: false
+batch_size:
+  desc: null
+  value: 8
+num_workers:
+  desc: null
+  value: 4
+c_hid:
+  desc: null
+  value: 64
+num_latents:
+  desc: null
+  value: 40
+lr:
+  desc: null
+  value: 0.0005
+warmup:
+  desc: null
+  value: 100
+noise_level:
+  desc: null
+  value: 0.05
+regularizer_weight:
+  desc: null
+  value: 0.0
+mi_reg_weight:
+  desc: null
+  value: 0.0
+files_to_save:
+  desc: null
+  value: ''
+subsample_percentage:
+  desc: null
+  value: 0.05
+use_coordconv:
+  desc: null
+  value: true
+max_iters:
+  desc: null
+  value: 50000
+img_width:
+  desc: null
+  value: 256
+c_in:
+  desc: null
+  value: 3
+_wandb:
+  desc: null
+  value:
+    python_version: 3.11.5
+    cli_version: 0.15.12
+    framework: huggingface
+    huggingface_version: 4.34.0
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    start_time: 1703174783.278677
+    t:
+      1:
+      - 1
+      - 9
+      - 11
+      - 35
+      - 41
+      - 49
+      - 55
+      - 63
+      - 103
+      2:
+      - 1
+      - 9
+      - 11
+      - 35
+      - 41
+      - 49
+      - 55
+      - 63
+      - 103
+      3:
+      - 13
+      - 16
+      - 23
+      4: 3.11.5
+      5: 0.15.12
+      6: 4.34.0
+      8:
+      - 5
+      13: linux-x86_64
+action_size:
+  desc: null
+  value: -1

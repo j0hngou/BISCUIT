@@ -1,0 +1,244 @@
+wandb_version: 1
+
+data_dir:
+  desc: null
+  value: /home/john/PhD/BISCUIT/data/ithor_extended/
+cluster:
+  desc: null
+  value: false
+seed:
+  desc: null
+  value: 42
+max_epochs:
+  desc: null
+  value: 1000
+debug:
+  desc: null
+  value: false
+offline:
+  desc: null
+  value: false
+batch_size:
+  desc: null
+  value: 1024
+num_workers:
+  desc: null
+  value: 4
+data_img_width:
+  desc: null
+  value: -1
+seq_len:
+  desc: null
+  value: 2
+lr:
+  desc: null
+  value: 0.001
+warmup:
+  desc: null
+  value: 100
+check_val_every_n_epoch:
+  desc: null
+  value: 1
+files_to_save:
+  desc: null
+  value: ''
+compile:
+  desc: null
+  value: false
+autoencoder_checkpoint:
+  desc: null
+  value: /home/john/PhD/BISCUIT/pretrained_models/AE_iTHOR_EXTENDED/AE64/AE_64l_64hid.ckpt
+c_hid:
+  desc: null
+  value: 64
+num_flows:
+  desc: null
+  value: 6
+num_samples:
+  desc: null
+  value: 2
+flow_act_fn:
+  desc: null
+  value: silu
+hidden_per_var:
+  desc: null
+  value: 12
+act_fn:
+  desc: null
+  value: silu
+num_latents:
+  desc: null
+  value: 64
+prior_action_add_prev_state:
+  desc: null
+  value: true
+try_encodings:
+  desc: null
+  value: true
+logit_reg_factor:
+  desc: null
+  value: 0.004
+text:
+  desc: null
+  value: true
+lr_text:
+  desc: null
+  value: 0.003
+wandb:
+  desc: null
+  value: true
+text_encoder:
+  desc: null
+  value: siglip
+subsample_percentage:
+  desc: null
+  value: 1.0
+subsample_chunk:
+  desc: null
+  value: 0
+debug_data:
+  desc: null
+  value: false
+data_folder:
+  desc: null
+  value: ithor_extended
+width:
+  desc: null
+  value: 256
+img_width:
+  desc: null
+  value: 256
+action_size:
+  desc: null
+  value: 2
+max_iters:
+  desc: null
+  value: 14000
+_wandb:
+  desc: null
+  value:
+    python_version: 3.11.5
+    cli_version: 0.15.12
+    framework: huggingface
+    huggingface_version: 4.34.0
+    is_jupyter_run: false
+    is_kaggle_kernel: false
+    start_time: 1701523257.793287
+    t:
+      1:
+      - 1
+      - 9
+      - 11
+      - 35
+      - 41
+      - 49
+      - 55
+      - 63
+      - 103
+      2:
+      - 1
+      - 9
+      - 11
+      - 35
+      - 41
+      - 49
+      - 55
+      - 63
+      - 103
+      3:
+      - 13
+      - 16
+      - 23
+      4: 3.11.5
+      5: 0.15.12
+      6: 4.34.0
+      8:
+      - 5
+      13: linux-x86_64
+data_name:
+  desc: null
+  value: ithor_extended
+var_names:
+  desc: null
+  value:
+  - Apple_f33eaaa0_center_x
+  - Apple_f33eaaa0_center_y
+  - Apple_f33eaaa0_center_z
+  - Apple_f33eaaa0_pickedup
+  - Apple_f33eaaa0_sliced
+  - Cabinet_47fc321b_open
+  - Egg_afaaaca3_broken
+  - Egg_afaaaca3_center_x
+  - Egg_afaaaca3_center_y
+  - Egg_afaaaca3_center_z
+  - Egg_afaaaca3_cooked
+  - Egg_afaaaca3_pickedup
+  - Knife_e6601c42_center_x
+  - Knife_e6601c42_center_y
+  - Knife_e6601c42_center_z
+  - Knife_e6601c42_pickedup
+  - Microwave_d8b935e4_on
+  - Microwave_d8b935e4_open
+  - Plate_49b95a7a_center_x
+  - Plate_49b95a7a_center_y
+  - Plate_49b95a7a_center_z
+  - Plate_49b95a7a_pickedup
+  - StoveKnob_38c1dbc2_on
+  - StoveKnob_690d0d5d_on
+  - StoveKnob_c8955f66_on
+  - StoveKnob_cf670576_on
+  - Toaster_194647f5_on
+cluster_logging:
+  desc: null
+  value: false
+causal_var_info:
+  desc: null
+  value:
+    Apple_f33eaaa0_center_x: continuous_1.0
+    Apple_f33eaaa0_center_y: continuous_1.0
+    Apple_f33eaaa0_center_z: continuous_1.0
+    Apple_f33eaaa0_pickedup: categ_2
+    Apple_f33eaaa0_sliced: categ_2
+    Cabinet_47fc321b_open: categ_2
+    Egg_afaaaca3_broken: categ_2
+    Egg_afaaaca3_center_x: continuous_1.0
+    Egg_afaaaca3_center_y: continuous_1.0
+    Egg_afaaaca3_center_z: continuous_1.0
+    Egg_afaaaca3_cooked: categ_2
+    Egg_afaaaca3_pickedup: categ_2
+    Knife_e6601c42_center_x: continuous_1.0
+    Knife_e6601c42_center_y: continuous_1.0
+    Knife_e6601c42_center_z: continuous_1.0
+    Knife_e6601c42_pickedup: categ_2
+    Microwave_d8b935e4_on: categ_2
+    Microwave_d8b935e4_open: categ_2
+    Plate_49b95a7a_center_x: continuous_1.0
+    Plate_49b95a7a_center_y: continuous_1.0
+    Plate_49b95a7a_center_z: continuous_1.0
+    Plate_49b95a7a_pickedup: categ_2
+    StoveKnob_38c1dbc2_on: categ_2
+    StoveKnob_690d0d5d_on: categ_2
+    StoveKnob_c8955f66_on: categ_2
+    StoveKnob_cf670576_on: categ_2
+    Toaster_194647f5_on: categ_2
+c_in:
+  desc: null
+  value: 3
+decoder_num_blocks:
+  desc: null
+  value: 1
+no_encoder_decoder:
+  desc: null
+  value: true
+linear_encoder_decoder:
+  desc: null
+  value: false
+use_flow_prior:
+  desc: null
+  value: true
+decoder_latents:
+  desc: null
+  value: -1
+noise_level:
+  desc: null
+  value: -1
