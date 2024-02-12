@@ -147,3 +147,5 @@ demo_data/
 *.ckpt
 *.out
 *.err
+wandb/
+*/wandb/*
