@@ -6,59 +6,6 @@ import tqdm
 from open_clip import create_model_from_pretrained, get_tokenizer
 
 
-# def translate_action_sequence(action_sequence):
-#     action_translations = {
-#         "NoOp": "did nothing with",
-#         "OpenObject": "opened",
-#         "ToggleObject": "toggled",
-#         "PickupObject": "picked up",
-#         "PutObject": "placed",
-#         "MoveObject": "moved"
-#     }
-
-#     object_translations = {
-#         "NoObject1": "no particular object",
-#         "NoObject2": "no particular object",
-#         "NoObject3": "no particular object",
-#         "Microwave": "the microwave",
-#         "Toaster": "the toaster",
-#         "Cabinet_47fc321b": "a cabinet",
-#         "StoveKnob_38c1dbc2": "the first stove knob",
-#         "StoveKnob_690d0d5d": "the second stove knob",
-#         "StoveKnob_c8955f66": "the third stove knob",
-#         "StoveKnob_cf670576": "the fourth stove knob",
-#         "Plate": "the plate",
-#         "Egg": "the egg",
-#         "Pan": "the pan",
-#         "CounterTop_f8092513": "the countertop"
-#     }
-
-#     holding_object = None
-
-#     human_readable_sequence = []
-
-#     for action_command in action_sequence:
-#         words = action_command.split(" ")
-#         action = words[0]
-#         obj = words[-1]
-
-#         translated_action = action_translations.get(action, "did something with")
-#         translated_object = object_translations.get(obj, "an unknown object")
-
-#         if action == "PutObject" and holding_object is not None:
-#             description = f"You {translated_action} {holding_object} on {translated_object}"
-#         else:
-#             description = f"You {translated_action} {translated_object}"
-
-#         human_readable_sequence.append(description)
-
-#         if action == "PickupObject":
-#             holding_object = translated_object
-#         elif action in ["PutObject"]:
-#             holding_object = None
-
-#     return human_readable_sequence
-
 def translate_action_sequence(action_sequence):
     action_translations = {
         "NoOp": "did nothing with",

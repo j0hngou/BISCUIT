@@ -968,6 +968,12 @@ class GridworldDataset(Dataset):
                     val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 100], axis=0)
                 if key == 'interventions':
                     val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 100], axis=0)
+                if key == 'input_ids':
+                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 100], axis=0)
+                if key == 'token_type_ids':
+                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 100], axis=0)
+                if key == 'attention_mask':
+                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 100], axis=0)
                 if key not in data:
                     data[key] = [val]
                 else:
@@ -1128,6 +1134,10 @@ class GridworldDataset(Dataset):
             returns.append(rob)
         if self.return_targets and target is not None:
             returns.append(target)
+        if self.return_text:
+            returns += [self.input_ids[start_frame_idx:start_frame_idx + self.seq_len - 1].squeeze(), 
+                        self.token_type_ids[start_frame_idx:start_frame_idx + self.seq_len - 1].squeeze(),
+                        self.attention_mask[start_frame_idx:start_frame_idx + self.seq_len - 1].squeeze()]
         if self.return_latents:
             returns.append(lat)
         

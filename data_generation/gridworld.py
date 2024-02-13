@@ -600,7 +600,7 @@ class Gridworld:
 
         if entity_description:
             action_desc = ACTION_MAPPING.get(action_code, 'performed an action on')
-            return f"You {action_desc} the {entity_description}."
+            return f"{action_desc} {entity_description}."
         else:
             return "The action did not match any entity."
 

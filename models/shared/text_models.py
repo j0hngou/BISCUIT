@@ -26,7 +26,11 @@ class SentenceTransformer(TextEncoder):
 
     def forward(self, inp, tokenized=True):
         if tokenized:
-            encoded_input = inp
+            encoded_input = {k:v.squeeze() for k,v in inp.items()}
+            if encoded_input['input_ids'].dim() == 1:
+                encoded_input['input_ids'] = encoded_input['input_ids'].unsqueeze(0)
+                encoded_input['token_type_ids'] = encoded_input['token_type_ids'].unsqueeze(0)
+                encoded_input['attention_mask'] = encoded_input['attention_mask'].unsqueeze(0)
         else:
             encoded_input = self.tokenizer(inp, padding=True, truncation=True, return_tensors='pt')
 

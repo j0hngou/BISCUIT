@@ -30,6 +30,7 @@ class InteractionTransitionPrior(nn.Module):
                  add_prev_state=False,
                  img_width=32,
                  text=False,
+                 text_only=False,
                  **kwargs):
         """
         Parameters
@@ -64,6 +65,7 @@ class InteractionTransitionPrior(nn.Module):
         self.last_batch_prev_state = None
         self.variable_alignments = None
         self.text = text
+        self.text_only = text_only
         if self.text:
             if kwargs.get('text_encoder', None) is None:
                 kwargs['text_encoder'] = 'sentence_transformer'
@@ -123,10 +125,12 @@ class InteractionTransitionPrior(nn.Module):
             enc_dim = encoding_layer.get_output_dim(self.action_size)
             if self.text:
                 enc_dim_with_text = enc_dim + self.c_hid // 4
+            if self.text_only:
+                enc_dim_text_only = self.c_hid // 4
         else:
             encoding_layer = nn.Identity()
             enc_dim = self.action_size
-        if self.text:
+        if self.text and not self.text_only:
             self.action_preprocess = MultivarSequential(
                 MultivarLinear(enc_dim_with_text + (self.num_latents if self.add_prev_state else 0), 
                     self.c_hid,
@@ -137,6 +141,20 @@ class InteractionTransitionPrior(nn.Module):
                     [self.num_latents]),
                 nn.SiLU(),
                     MultivarLinear(self.c_hid, 
+                    1,
+                    [self.num_latents])
+            )
+        elif self.text_only:
+            self.action_preprocess = MultivarSequential(
+                MultivarLinear(enc_dim_text_only + (self.num_latents if self.add_prev_state else 0),
+                    self.c_hid,
+                    [self.num_latents]),
+                nn.SiLU(),
+                MultivarLinear(self.c_hid, 
+                    self.c_hid,
+                    [self.num_latents]),
+                nn.SiLU(),
+                MultivarLinear(self.c_hid, 
                     1,
                     [self.num_latents])
             )
@@ -159,9 +177,12 @@ class InteractionTransitionPrior(nn.Module):
             # If we add the previous state, it is better to initialize the weights
             # to put equal importance on actions and previous states, since the
             # previous state is usually much higher dimensional (e.g. 2/16 vs 40 in iTHOR)
-            if self.text:
+            if self.text and not self.text_only:
                 self.action_preprocess[0].weight.data[...,enc_dim_with_text:] *= np.sqrt(enc_dim_with_text / self.num_latents)
                 self.action_preprocess[0].weight.data[...,:enc_dim_with_text] *= np.sqrt(self.num_latents / enc_dim_with_text)
+            elif self.text_only:
+                self.action_preprocess[0].weight.data[...,enc_dim_text_only:] *= np.sqrt(enc_dim_text_only / self.num_latents)
+                self.action_preprocess[0].weight.data[...,:enc_dim_text_only] *= np.sqrt(self.num_latents / enc_dim_text_only)
             else:
                 self.action_preprocess[1].weight.data[...,enc_dim:] *= np.sqrt(enc_dim / self.num_latents)
                 self.action_preprocess[1].weight.data[...,:enc_dim] *= np.sqrt(self.num_latents / enc_dim)
@@ -247,7 +268,13 @@ class InteractionTransitionPrior(nn.Module):
             text_embeddings = self.text_MLP(text_embeddings)
             text_embeddings = text_embeddings.unsqueeze(dim=1).expand(-1, self.num_latents, -1)
             encoded_action = self.encoding_layer(action)
-            action = torch.cat([encoded_action, text_embeddings], dim=-1)
+            if not self.text_only:
+                action = torch.cat([encoded_action, text_embeddings], dim=-1)
+            else:
+                action = text_embeddings
+                if self.add_prev_state:
+                    z_t = z_t[:,None,:].expand(-1, action.shape[1], -1)
+                    action = torch.cat([action, z_t], dim=-1)
 
         action = self.action_preprocess(action, detach_weights=detach_weights)
         abs_logits = torch.abs(action)
@@ -302,7 +329,12 @@ class InteractionTransitionPrior(nn.Module):
             if not tokenized:
                 text_embeddings = text_embeddings.repeat(encoded_action.shape[0], 1)
             text_embeddings = text_embeddings[...,None,:].expand(-1, self.num_latents, -1)
-            action = torch.cat([encoded_action, text_embeddings], dim=-1)
+            if not self.text_only:
+                action = torch.cat([encoded_action, text_embeddings], dim=-1)
+            else:
+                action = text_embeddings
+                if prev_state is not None:
+                    action = torch.cat([action, prev_state], dim=-1)
             action = self.action_preprocess(action).squeeze(dim=-1)
         else:
             action = self.action_preprocess(action[...,None,:].expand(-1, self.num_latents, -1)).squeeze(dim=-1)

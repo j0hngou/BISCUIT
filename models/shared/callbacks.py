@@ -54,12 +54,19 @@ class NextStepCallback(pl.Callback):
             gt_image_latents = torch.tensor(frame_seq[0][1], device=pl_module.device)
             gt_image = pl_module.autoencoder.decoder(gt_image_latents[None])[0]
             gt_image = (gt_image + 1.0) / 2.0  # Convert to 0-1 range
-
+            if len(frame_seq) > 2:
+                input_ids = torch.tensor(frame_seq[2], device=pl_module.device)
+                token_type_ids = torch.tensor(frame_seq[3], device=pl_module.device)
+                attention_mask = torch.tensor(frame_seq[4], device=pl_module.device)
+                tokenized_description = dict(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
+            else:
+                tokenized_description = None
             # Generate the new image and latents with the model
             new_image, new_latents = self.next_step_prediction(
                 model=pl_module,
                 image=image,
                 action=action,
+                tokenized_description=tokenized_description
             )
 
             # Calculate difference to determine if the exclamation mark image should be included
@@ -137,13 +144,14 @@ class NextStepCallback(pl.Callback):
             action: torch.Tensor,
             latents: torch.Tensor = None,
             intv_targets: torch.Tensor = None,
+            tokenized_description: dict[str, torch.Tensor] = None,
             N: int = 8
         ) -> tuple[torch.Tensor, torch.Tensor]:
         if latents is None:
             input_image = (image * 2.0) - 1.0
             latents = model.autoencoder.encoder(input_image[None])
             latents, _ = model.flow.forward(latents)
-        new_latents, _ = model.prior_t1.sample(latents, action[None], num_samples=1, intv_targets=intv_targets)
+        new_latents, _ = model.prior_t1.sample(latents, action[None], num_samples=1, intv_targets=intv_targets, tokenized_description=tokenized_description)
         new_latents = new_latents.squeeze(1)
         new_encodings = model.flow.reverse(new_latents)
         new_image = model.autoencoder.decoder(new_encodings)[0]
