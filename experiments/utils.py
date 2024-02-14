@@ -72,6 +72,8 @@ def load_datasets(args):
         dataset_args['debug_data'] = args.debug_data
     if hasattr(args, 'perfect_intv'):
         perfect_intv = args.perfect_intv
+    if hasattr(args, 'text_only'):
+        dataset_args['text_only'] = args.text_only
     train_dataset = DataClass(
         data_folder=args.data_dir, split='train', return_targets=True if perfect_intv else False, single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=args.subsample_percentage, **dataset_args)
     val_dataset = DataClass(
