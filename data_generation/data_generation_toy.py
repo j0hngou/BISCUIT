@@ -13,7 +13,7 @@ import argparse
 
 def save_metadata(dataset_name, split, gridworld, simplified=True):
     object_names = ['_'.join(a.split('_')[:-1]) for a in sorted(gridworld.get_causals())]
-    action_types = ['turn', 'change_state', 'move_to']
+    action_types = ['turn', 'change_state', 'move_to', 'move_to_left', 'move_to_right', 'move_to_up', 'move_to_down']
     causal_vector = gridworld.get_causal_vector(are_light_positions_fixed=True)
     flattened_causals = sorted(gridworld.get_flattened_causals().keys())
     if simplified:
@@ -200,5 +200,5 @@ if __name__ == '__main__':
     # seeds = range(train_seeds + val_seeds, train_seeds + val_seeds + test_seeds)
     # print(f'Generating {seeds} seeds for the test split')
     # gen_data(seeds, batch_size, 'test', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
-    for i in range(11000, 11500):
-        run_simulation(i, 'check', dataset_name, grid_x, grid_y, sprite_size, fixed_light_positions, save_metadata_flag=True, pre_intervention_step=args.pre_intervention_step)
+    # for i in range(11000, 11500):
+    run_simulation(15, 'check', dataset_name, grid_x, grid_y, sprite_size, fixed_light_positions, save_metadata_flag=True, pre_intervention_step=args.pre_intervention_step)

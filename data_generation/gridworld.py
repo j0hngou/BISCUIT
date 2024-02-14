@@ -574,7 +574,7 @@ class Gridworld:
         return color_name
 
     def describe_action(self, causals, action):
-        ACTION_MAPPING = {1: 'turned', 2: 'changed the state of', 3: 'moved'}
+        ACTION_MAPPING = {1: 'turned', 2: 'changed the state of', 3: 'moved', 4: 'moved left', 5: 'moved right', 6: 'moved up', 7: 'moved down'}
 
         if action == (-1, -1, -1):
             return "No action was performed."
@@ -605,7 +605,7 @@ class Gridworld:
             return "The action did not match any entity."
 
     def semi_random_intervention(self, intervention_probabilities = {
-            'Vehicle': 0.4, 'TrafficLight': 0.4, 'Obstacle': 0.1, 'None': 0.1
+            'Vehicle': 0.2, 'TrafficLight': 0.4, 'Obstacle': 0.3, 'None': 0.1
         }):
         """
         Performs a semi-random intervention on a randomly chosen entity in the gridworld.
@@ -621,9 +621,9 @@ class Gridworld:
         binary_interventions = {key: 0 for key in flattened_causals.keys()}  # Use dictionary for binary interventions
         action_code = (-1, -1, -1)
         # Define the action mapping
-        ACTION_MAPPING = {'turn': 1, 'change_state': 2, 'move_to': 3}
+        ACTION_MAPPING = {'turn': 1, 'change_state': 2, 'move_to': 3, 'move_to_left': 4, 'move_to_right': 5, 'move_to_up': 6, 'move_to_down': 7}
         
-        assert sum(intervention_probabilities.values()) == 1, "Intervention probabilities must sum to 1."
+        assert np.isclose(sum(intervention_probabilities.values()), 1.0), "Intervention probabilities should sum to 1."
 
         # Select an entity type based on the defined probabilities
         entity_type = np.random.choice(list(intervention_probabilities.keys()), p=list(intervention_probabilities.values()))
@@ -643,7 +643,8 @@ class Gridworld:
                     possible_moves = self.get_free_cells_around_entity(obstacle)
                     if possible_moves:
                         new_x, new_y = random.choice(possible_moves)
-                        action_code = (obstacle.x, obstacle.y, ACTION_MAPPING['move_to'])
+                        cardinal_direction = {(-1, 0): 'left', (1, 0): 'right', (0, -1): 'up', (0, 1): 'down'}[(new_x - entity.x, new_y - entity.y)]
+                        action_code = (entity.x, entity.y, ACTION_MAPPING[f'move_to_{cardinal_direction}'])
                         x_changed = new_x != obstacle.x
                         y_changed = new_y != obstacle.y
                         self.intervene(obstacle, 'move_to', x=new_x, y=new_y)
@@ -682,7 +683,8 @@ class Gridworld:
             possible_moves = self.get_free_cells_around_entity(entity)
             if possible_moves:
                 new_x, new_y = random.choice(possible_moves)
-                action_code = (entity.x, entity.y, ACTION_MAPPING['move_to'])
+                cardinal_direction = {(-1, 0): 'left', (1, 0): 'right', (0, -1): 'up', (0, 1): 'down'}[(new_x - entity.x, new_y - entity.y)]
+                action_code = (entity.x, entity.y, ACTION_MAPPING[f'move_to_{cardinal_direction}'])
                 x_changed = new_x != entity.x
                 y_changed = new_y != entity.y
                 self.intervene(entity, 'move_to', x=new_x, y=new_y)

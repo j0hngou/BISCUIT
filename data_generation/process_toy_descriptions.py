@@ -57,13 +57,27 @@ def weighted_choice(choices):
     return np.random.choice(phrases, p=probs)
 
 def generate_description_probabilistic(action, object_type, color, grammar):
-    num_adjectives = random.randint(1, 3)
+    # Determine if the action involves a specific direction
+    movement_actions = ["moved left", "moved right", "moved up", "moved down"]
+    is_movement_action = any(movement in action for movement in movement_actions)
+
+    action_modifier = weighted_choice(grammar["ACTION_MODIFIER"])
+    # Generate adjectives for the object regardless of the action type
+    num_adjectives = random.randint(0, 2)
     adjectives_list = grammar["ADJECTIVES"][object_type]
     adjectives = ', '.join(weighted_choice(adjectives_list) for _ in range(num_adjectives))
-    action_modifier = weighted_choice(grammar["ACTION_MODIFIER"])
 
-    full_description = f"You {action_modifier} {action} the {adjectives}, {color} {object_type}."
+    if is_movement_action:
+        # Split the action into the verb and the direction for movement actions
+        verb, direction = action.split(" ")[0], " ".join(action.split(" ")[1:])
+        # Now include adjectives in the movement description
+        full_description = f"You {action_modifier} {verb} the {adjectives + ', ' if adjectives else ''}{color} {object_type} {direction}."
+    else:
+        # For non-movement actions, the description remains similar but focuses on the action's effect
+        full_description = f"You {action_modifier} {action} the {adjectives}, {color} {object_type}."
+    
     return full_description
+
 
 def translate_description(description, metadata, grammar):
     # Create a dictionary to map RGB tuples to color names for all object types
@@ -71,7 +85,7 @@ def translate_description(description, metadata, grammar):
     color_names = {name: get_color_name(rgb) for name, rgb in object_names.items()}
     
     # Attempt to find a matching description based on the action and object type in the description
-    for action in ['turned', 'changed the state of', 'moved']:
+    for action in ['turned', 'changed the state of', 'moved left', 'moved right', 'moved up', 'moved down']:
         if action in description:
             for name in metadata['object_names']:
                 object_type_raw, rgb_str = name.split('_')[0], name.split('_')[1]
@@ -122,5 +136,6 @@ if __name__ == '__main__':
     # Specify your dataset paths
     path = '/home/john/PhD/BISCUIT/data/gridworld_simplified_5c/'
     
-    for split in ['train', 'val', 'test', 'test_indep', 'val_indep']:
-        process_dataset(path, split, tokenizer, GRAMMAR)
+    # for split in ['train', 'val', 'test', 'test_indep', 'val_indep']:
+    #     process_dataset(path, split, tokenizer, GRAMMAR)
+    process_single_episode('/home/john/PhD/BISCUIT/data_generation/data/gridworld_simplified_5c/check/gridworld_episode_15.npz', tokenizer, load_metadata('/home/john/PhD/BISCUIT/data_generation/data/gridworld_simplified_5c/check_metadata.json'), GRAMMAR)
