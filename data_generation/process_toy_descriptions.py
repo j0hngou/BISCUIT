@@ -5,9 +5,8 @@ import webcolors
 from concurrent.futures import ThreadPoolExecutor
 import tqdm
 from open_clip import get_tokenizer
+from transformers import AutoTokenizer
 import random
-
-# Existing functions: closest_color, get_color_name, load_metadata remain unchanged
 
 # PCFG and description generation logic
 GRAMMAR = {
@@ -58,12 +57,14 @@ def weighted_choice(choices):
 
 def generate_description_probabilistic(action, object_type, color, grammar):
     # Determine if the action involves a specific direction
-    movement_actions = ["moved left", "moved right", "moved up", "moved down"]
+    movement_actions = ["moved left", "moved right", "moved up", "moved down", "turned left", "turned right", "turned up", "turned down"]
     is_movement_action = any(movement in action for movement in movement_actions)
 
-    action_modifier = weighted_choice(grammar["ACTION_MODIFIER"])
+    action_modifier = weighted_choice(grammar["ACTION_MODIFIER"]) + ' '
+    if random.random() < 0.7:
+        action_modifier = ''
     # Generate adjectives for the object regardless of the action type
-    num_adjectives = random.randint(0, 2)
+    num_adjectives = random.randint(0, 1)
     adjectives_list = grammar["ADJECTIVES"][object_type]
     adjectives = ', '.join(weighted_choice(adjectives_list) for _ in range(num_adjectives))
 
@@ -71,10 +72,10 @@ def generate_description_probabilistic(action, object_type, color, grammar):
         # Split the action into the verb and the direction for movement actions
         verb, direction = action.split(" ")[0], " ".join(action.split(" ")[1:])
         # Now include adjectives in the movement description
-        full_description = f"You {action_modifier} {verb} the {adjectives + ', ' if adjectives else ''}{color} {object_type} {direction}."
+        full_description = f"You {action_modifier}{verb} the {adjectives + ', ' if adjectives else ''}{color} {object_type} {direction}."
     else:
         # For non-movement actions, the description remains similar but focuses on the action's effect
-        full_description = f"You {action_modifier} {action} the {adjectives}, {color} {object_type}."
+        full_description = f"You {action_modifier}{action} the {adjectives + ', ' if adjectives else ''}{color} {object_type}."
     
     return full_description
 
@@ -84,8 +85,12 @@ def translate_description(description, metadata, grammar):
     object_names = {name: tuple(map(int, name.split('_')[1][1:-1].split(', '))) for name in metadata['object_names']}
     color_names = {name: get_color_name(rgb) for name, rgb in object_names.items()}
     
-    # Attempt to find a matching description based on the action and object type in the description
-    for action in ['turned', 'changed the state of', 'moved left', 'moved right', 'moved up', 'moved down']:
+    if 'No action' in description:
+        no_op_list = ['No action.', 'No action taken.', 'No action was taken.', 'No action performed.', 'No action was performed.',
+                     'Not a single action was executed.', 'No activity was undertaken.', 'No activity was carried out.',
+                     'You did not perform any action.', 'You did not carry out any action.', 'You did not execute any action.']
+        return random.choice(no_op_list)
+    for action in ['turned left', 'turned right', 'turned up', 'turned down', 'changed the state of', 'moved left', 'moved right', 'moved up', 'moved down']:
         if action in description:
             for name in metadata['object_names']:
                 object_type_raw, rgb_str = name.split('_')[0], name.split('_')[1]
@@ -98,14 +103,14 @@ def translate_description(description, metadata, grammar):
                     # Note: Assuming 'action' passed here is already in the desired format for generation
                     # Adjust 'object_type_raw' as needed to fit the grammar's expected keys
                     return generate_description_probabilistic(action, object_type, color_name, grammar)
-    return description  # Fallback to the original description if no translation was applied
+    raise ValueError(f"Could not find a matching description for the given input: {description}")
 
 def process_single_episode(file, tokenizer, metadata, grammar):
     data = dict(np.load(file, allow_pickle=True))
     descriptions = data['action_descriptions']  # Assuming 'descriptions' is the key for action descriptions in your dataset
     
     translated_descriptions = [translate_description(description, metadata, grammar) for description in descriptions]
-    tokenized_descriptions = [tokenizer.tokenizer(description, return_token_type_ids=True, padding='max_length', max_length=64) for description in translated_descriptions]  # Adjust context_length if necessary
+    tokenized_descriptions = [tokenizer(description, return_token_type_ids=True, padding='max_length', max_length=64) for description in translated_descriptions]  # Adjust context_length if necessary
     input_ids = np.stack([desc['input_ids'] for desc in tokenized_descriptions], axis=0)
     attention_mask = np.stack([desc['attention_mask'] for desc in tokenized_descriptions], axis=0)
     token_type_ids = np.stack([desc['token_type_ids'] for desc in tokenized_descriptions], axis=0)
@@ -131,11 +136,15 @@ def process_dataset(path, split, tokenizer, grammar):
     #     process_single_episode(file, tokenizer, metadata, grammar)
 
 if __name__ == '__main__':
-    tokenizer = get_tokenizer('hf-hub:timm/ViT-B-16-SigLIP')
-
+    model_name = 'sentence-transformers/all-MiniLM-L6-v2'
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     # Specify your dataset paths
-    path = '/home/john/PhD/BISCUIT/data/gridworld_simplified_5c/'
+    path = '/home/gkounto/BISCUIT/data_generation/data/gridworld_simplified_18c_3d/'
     
-    # for split in ['train', 'val', 'test', 'test_indep', 'val_indep']:
-    #     process_dataset(path, split, tokenizer, GRAMMAR)
-    process_single_episode('/home/john/PhD/BISCUIT/data_generation/data/gridworld_simplified_5c/check/gridworld_episode_15.npz', tokenizer, load_metadata('/home/john/PhD/BISCUIT/data_generation/data/gridworld_simplified_5c/check_metadata.json'), GRAMMAR)
+    for split in ['train', 'val', 'test', 'test_indep', 'val_indep']:
+        process_dataset(path, split, tokenizer, GRAMMAR)
+    
+    # Skeleton code for testing the functions
+    # process_single_episode('/home/john/PhD/BISCUIT/data_generation/data/gridworld_simplified_18c/check/gridworld_episode_15.npz', tokenizer, load_metadata('/home/john/PhD/BISCUIT/data_generation/data/gridworld_simplified_18c/check_metadata.json'), GRAMMAR)
+    # for _ in range(10):
+    #     print(generate_description_probabilistic('move left', 'obstacle', 'brown', GRAMMAR))

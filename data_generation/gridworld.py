@@ -574,7 +574,7 @@ class Gridworld:
         return color_name
 
     def describe_action(self, causals, action):
-        ACTION_MAPPING = {1: 'turned', 2: 'changed the state of', 3: 'moved', 4: 'moved left', 5: 'moved right', 6: 'moved up', 7: 'moved down'}
+        ACTION_MAPPING = {1: 'turned left', 2: 'turned right', 3: 'turned up', 4: 'turned down', 5: 'changed the state of', 6: 'moved left', 7: 'moved right', 8: 'moved up', 9: 'moved down'}
 
         if action == (-1, -1, -1):
             return "No action was performed."
@@ -590,7 +590,7 @@ class Gridworld:
                 color_name = Gridworld.get_color_name(rgb_tuple)
                 entity_description = f"{color_name} {entity_type}"
             # elif action_code == 2: # Change state of traffic light
-        if action_code == 2:
+        if action_code == 5:
             for light in traffic_lights:
                 if light.x == action_pos[0] and light.y == action_pos[1]:
                     entity_name, entity_color = light.__class__.__name__, light.color
@@ -621,7 +621,7 @@ class Gridworld:
         binary_interventions = {key: 0 for key in flattened_causals.keys()}  # Use dictionary for binary interventions
         action_code = (-1, -1, -1)
         # Define the action mapping
-        ACTION_MAPPING = {'turn': 1, 'change_state': 2, 'move_to': 3, 'move_to_left': 4, 'move_to_right': 5, 'move_to_up': 6, 'move_to_down': 7}
+        ACTION_MAPPING = {'turn_left': 1, 'turn_right': 2, 'turn_up': 3, 'turn_down': 4, 'change_state': 5, 'move_to_left': 6, 'move_to_right': 7, 'move_to_up': 8, 'move_to_down': 9}
         
         assert np.isclose(sum(intervention_probabilities.values()), 1.0), "Intervention probabilities should sum to 1."
 
@@ -643,8 +643,8 @@ class Gridworld:
                     possible_moves = self.get_free_cells_around_entity(obstacle)
                     if possible_moves:
                         new_x, new_y = random.choice(possible_moves)
-                        cardinal_direction = {(-1, 0): 'left', (1, 0): 'right', (0, -1): 'up', (0, 1): 'down'}[(new_x - entity.x, new_y - entity.y)]
-                        action_code = (entity.x, entity.y, ACTION_MAPPING[f'move_to_{cardinal_direction}'])
+                        cardinal_direction = {(-1, 0): 'left', (1, 0): 'right', (0, -1): 'up', (0, 1): 'down'}[(new_x - obstacle.x, new_y - obstacle.y)]
+                        action_code = (obstacle.x, obstacle.y, ACTION_MAPPING[f'move_to_{cardinal_direction}'])
                         x_changed = new_x != obstacle.x
                         y_changed = new_y != obstacle.y
                         self.intervene(obstacle, 'move_to', x=new_x, y=new_y)
@@ -654,24 +654,23 @@ class Gridworld:
                 else:
                     if random.random() < 0.3:
                         # Turn the car
-                        # current_orientation = entity.orientation
-                        # new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
-                        # new_orientation = random.choice(new_orientation_choices)
-                        # self.intervene(entity, 'turn', new_orientation=new_orientation)
-                        # binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
-                        # action_code = (entity.x, entity.y, ACTION_MAPPING['turn'])
-                        pass
+                        current_orientation = entity.orientation
+                        new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
+                        new_orientation = random.choice(new_orientation_choices)
+                        self.intervene(entity, 'turn', new_orientation=new_orientation)
+                        binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
+                        action_code = (entity.x, entity.y, ACTION_MAPPING[f'turn_{new_orientation}'])
                     else:
                         # Do nothing
                         pass
             else:
-                # # Turn the car
-                # current_orientation = entity.orientation
-                # new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
-                # new_orientation = random.choice(new_orientation_choices)
-                # self.intervene(entity, 'turn', new_orientation=new_orientation)
-                # binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
-                # action_code = (entity.x, entity.y, ACTION_MAPPING['turn'])
+                # Turn the car
+                current_orientation = entity.orientation
+                new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
+                new_orientation = random.choice(new_orientation_choices)
+                self.intervene(entity, 'turn', new_orientation=new_orientation)
+                binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
+                action_code = (entity.x, entity.y, ACTION_MAPPING[f'turn_{new_orientation}'])
                 pass
         if isinstance(entity, TrafficLight):
             # Change the state of the traffic light
@@ -944,8 +943,8 @@ class Gridworld:
                     if not are_light_positions_fixed:
                         causal_dict[f'{base_key}_orientation'] = entity.orientation
                 else:
-                    pass
-                    # causal_dict[f'{base_key}_orientation'] = entity.orientation
+                    # pass
+                    causal_dict[f'{base_key}_orientation'] = entity.orientation
             # causal_dict[f'{base_key}_color'] = entity.color
             if isinstance(entity, TrafficLight):
                 causal_dict[f'{base_key}_state'] = entity.state
