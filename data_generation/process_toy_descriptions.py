@@ -145,7 +145,7 @@ if __name__ == '__main__':
     # process_single_episode('/home/john/PhD/BISCUIT/data_generation/data/gridworld_simplified_18c/check/gridworld_episode_15.npz', tokenizer, load_metadata('/home/john/PhD/BISCUIT/data_generation/data/gridworld_simplified_18c/check_metadata.json'), GRAMMAR)
     # for _ in range(10):
     #     print(generate_description_probabilistic('move left', 'obstacle', 'brown', GRAMMAR))
-    path = '/home/gkounto/BISCUIT/data_generation/data/gridworld_simplified_5c_3d/'
+    path = '/home/gkounto/BISCUIT/data_generation/data/gridworld_simplified_12c_3d/'
     
     for split in ['train', 'val', 'test', 'val_indep', 'test_indep']:
         process_dataset(path, split, tokenizer, GRAMMAR)
