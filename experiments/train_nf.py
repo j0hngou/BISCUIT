@@ -63,6 +63,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug_data', default=False, action="store_true")
     parser.add_argument('--perfect_intv', default=False, action="store_true")
     parser.add_argument('--text_only', default=False, action="store_true")
+    parser.add_argument('--stop_grad', default=False, action="store_true")
 
 
     args = parser.parse_args()
@@ -78,10 +79,11 @@ if __name__ == '__main__':
     model_args['max_iters'] = args.max_epochs * len(data_loaders['train'])
     model_args['text'] = args.text
     model_args['text_only'] = args.text_only
+    model_args['stop_grad'] = args.stop_grad
     model_class = BISCUITNF
     textornot = 'text' if args.text else 'notext'
     textornot += '_textonly' if args.text_only else ''
-    logger_name = f'BISCUITNF_{args.num_latents}l_{datasets["train"].num_vars()}b_{args.c_hid}hid_{data_name}_{textornot}_ss{args.subsample_percentage}_sc{args.subsample_chunk}_{"perfect_intv" if args.perfect_intv else "est_intv"}'
+    logger_name = f'BISCUITNF_{args.num_latents}l_{datasets["train"].num_vars()}b_{args.c_hid}hid_{data_name}_{textornot}_ss{args.subsample_percentage}_sc{args.subsample_chunk}_{"perfect_intv" if args.perfect_intv else "est_intv"}_randomnextstep'
     args_logger_name = model_args.pop('logger_name')
     if len(args_logger_name) > 0:
         logger_name += '/' + args_logger_name

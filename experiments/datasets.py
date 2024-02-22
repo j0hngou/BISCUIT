@@ -1099,6 +1099,12 @@ class GridworldDataset(Dataset):
         start_frame_idx = self.indices[idx]
         
         # Fetch frame or frame pair
+        # img_pair = self.imgs[start_frame_idx:start_frame_idx + self.seq_len]
+        # if self.split_name == 'train':
+        #     # Randomize the second frame in the pair, sampling from the whole dataset
+        #     second_frame = np.random.choice(self.imgs.shape[0])
+        #     img_pair = np.stack([self.imgs[start_frame_idx], self.imgs[second_frame]], axis=0)
+        # else:
         img_pair = self.imgs[start_frame_idx:start_frame_idx + self.seq_len]
         
         # Fetch actions and interventions corresponding to the start_frame_idx
