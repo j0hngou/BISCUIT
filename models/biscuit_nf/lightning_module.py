@@ -51,6 +51,7 @@ class BISCUITNF(BISCUITVAE):
         kwargs['no_encoder_decoder'] = True  # We do not need any additional en- or decoder
         super().__init__(*args, **kwargs)
         self.text = kwargs.get('text', False)
+        self.stop_grad = kwargs.get('stop_grad', False)
         # Initialize the flow
         self.flow = AutoregNormalizingFlow(self.hparams.num_latents, 
                                            self.hparams.num_flows,
@@ -91,15 +92,31 @@ class BISCUITNF(BISCUITVAE):
             x_enc = x_enc[...,None,:].expand(-1, -1, self.hparams.num_samples, -1)
             batch_size, seq_len, num_samples, num_latents = x_enc.shape
             x_sample = x_enc + torch.randn_like(x_enc) * self.hparams.noise_level
-            x_sample = x_sample.flatten(0, 2)
+            if self.stop_grad:
+                x_t = x_sample[:, 0:1, :, :].detach()
+                x_t1 = x_sample[:, 1:, :, :]
+                x_t_flat = x_t.flatten(0, 2)
+                x_t1_flat = x_t1.flatten(0, 2)
+            else:
+                x_sample = x_sample.flatten(0, 2)
         if self.text:
             tokenized_description = dict(input_ids=input_ids, token_type_ids=token_type_ids, attention_mask=attention_mask)
         else:
             tokenized_description = None
         # Execute the flow
-        z_sample, ldj = self.flow(x_sample)
-        z_sample = z_sample.unflatten(0, (batch_size, seq_len, num_samples))
-        ldj = ldj.reshape(batch_size, seq_len, num_samples)
+        if self.stop_grad:
+            z_t1, ldj_t1 = self.flow(x_t1_flat)
+            z_t1 = z_t1.unflatten(0, (batch_size, seq_len-1, num_samples))
+            ldj_t1 = ldj_t1.reshape(batch_size, seq_len-1, num_samples)
+            z_t, ldj_t = self.flow(x_t_flat.detach())
+            z_t = z_t.unflatten(0, (batch_size, 1, num_samples))
+            ldj_t = ldj_t.reshape(batch_size, 1, num_samples)
+            z_sample = torch.cat([z_t, z_t1], dim=1)
+            ldj = torch.cat([ldj_t, ldj_t1], dim=1)
+        else:
+            z_sample, ldj = self.flow(x_sample)
+            z_sample = z_sample.unflatten(0, (batch_size, seq_len, num_samples))
+            ldj = ldj.reshape(batch_size, seq_len, num_samples)
         # Calculate the negative log likelihood of the transition prior
         nll = self.prior_t1.sample_based_nll(z_t=z_sample[:,:-1].flatten(0, 1),
                                              z_t1=z_sample[:,1:].flatten(0, 1),
@@ -152,7 +169,8 @@ class BISCUITNF(BISCUITVAE):
         # Create learning rate callback
         lr_callback = LearningRateMonitor('step')
         next_step_callback = NextStepCallback(dataset=next_step_dataset, every_n_epochs=1)
-        callbacks = [lr_callback, img_callback, next_step_callback]
+        next_step_callback_train = NextStepCallback(dataset=dataset, every_n_epochs=1, split_name='train')
+        callbacks = [lr_callback, img_callback, next_step_callback, next_step_callback_train]
         corr_callback = PermutationCorrelationMetricsLogCallback(correlation_dataset, 
                                                                  cluster=cluster, 
                                                                  test_dataset=correlation_test_dataset)

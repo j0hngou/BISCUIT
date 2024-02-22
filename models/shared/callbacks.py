@@ -26,13 +26,14 @@ import wandb
 from torchvision.utils import make_grid
 
 class NextStepCallback(pl.Callback):
-    def __init__(self, dataset, every_n_epochs=1, threshold=0.001, num_samples=5):
+    def __init__(self, dataset, every_n_epochs=1, threshold=0.001, num_samples=5, split_name='val'):
         super().__init__()
         self.every_n_epochs = every_n_epochs
         self.threshold = threshold  # Difference threshold for including the exclamation mark image
         self.num_samples = num_samples  # Number of samples to log
         self.indices = np.random.choice(len(dataset), num_samples, replace=False)
         self.dataset = dataset
+        self.split_name = split_name
 
     @torch.no_grad()
     def on_validation_epoch_end(self, trainer, pl_module):
@@ -85,8 +86,10 @@ class NextStepCallback(pl.Callback):
             # action_image = (action_image + 1.0) / 2.0  # Convert to 0-1 range
             pixel_x = int(action[0].item() * (action_image.shape[1] - 1))
             pixel_y = int(action[1].item() * (action_image.shape[2] - 1))
-            action_image[:, max(0, pixel_y-5):pixel_y+6, max(0, pixel_x-5):pixel_x+6] = 1.0  # Assuming action is normalized
-            images_to_log.insert(1, action_image.cpu())  # Insert action image after the previous frame
+            if torch.any(action < 0):
+                pass
+            else:
+                action_image[:, max(0, pixel_y-5):pixel_y+6, max(0, pixel_x-5):pixel_x+6] = 1.0 
 
             # Optionally add an exclamation mark image if there's a notable difference
             if include_exclamation_mark:
@@ -98,7 +101,7 @@ class NextStepCallback(pl.Callback):
             images_grid = make_grid(images_to_log, nrow=len(images_to_log), pad_value=1)  # Use pad_value to add space between
 
             # Log the image grid to wandb
-            wandb.log({"image_grid": [wandb.Image(images_grid, caption="Frame Sequence")]}, step=trainer.global_step)
+            wandb.log({f"{self.split_name}_image_grid": [wandb.Image(images_grid, caption="Frame Sequence")]}, step=trainer.global_step)
 
     
     def create_exclamation_mark_image(self, size=256, background_color=(1, 1, 1), mark_color=(1, 0, 0), mark_thickness=10, mark_height=100, dot_radius=10):
@@ -571,6 +574,16 @@ class CorrelationMetricsLogCallback(pl.Callback):
                      tvalues[:, 9:10], tvalues[:, 10:12].mean(dim=-1, keepdims=True), tvalues[:, 12:13],
                      tvalues[:, 13:15].mean(dim=-1, keepdims=True), tvalues[:, 15:16],
                         tvalues[:, 16:18].mean(dim=-1, keepdims=True)], dim=-1).abs()
+            elif values.shape[1] == 10:
+                tvalues = torch.from_numpy(values)
+                tvalues = torch.cat(
+                    [tvalues[:, :2].mean(dim=-1, keepdims=True),
+                     tvalues[:, 2:4],
+                     tvalues[:, 4:5],
+                     tvalues[:, 5:7].mean(dim=-1, keepdims=True),
+                     tvalues[:, 7:8],
+                     tvalues[:, 8:10].mean(dim=-1, keepdims=True)], dim=-1).abs()
+
             # elif values.shape[1] == 5:
             #     tvalues = torch.from_numpy(values).abs()
                 # tvalues = torch.cat(
@@ -640,17 +653,24 @@ class PermutationCorrelationMetricsLogCallback(CorrelationMetricsLogCallback):
             if ta.shape[1] == 5:
                 ta = torch.cat([ta[:,:2].sum(dim=-1, keepdims=True),
                                 ta[:,2:]], dim=-1)
+            elif ta.shape[1] == 10:
+                ta = torch.cat([ta[:,:2].sum(dim=-1, keepdims=True),
+                                ta[:, 2:4],
+                                ta[:, 4:5],
+                                ta[:, 5:7].sum(dim=-1, keepdims=True),
+                                ta[:, 7:8],
+                                ta[:, 8:10].sum(dim=-1, keepdims=True)], dim=-1)
             else:
-                ta = torch.cat([ta[:,:2].sum(dim=-1, keepdims=true),
-                                ta[:,2:4].sum(dim=-1, keepdims=true),
-                                ta[:,4:6].sum(dim=-1, keepdims=true),
+                ta = torch.cat([ta[:,:2].sum(dim=-1, keepdims=True),
+                                ta[:,2:4].sum(dim=-1, keepdims=True),
+                                ta[:,4:6].sum(dim=-1, keepdims=True),
                                 ta[:,6:9],
                                 ta[:,9:10],
-                                ta[:,10:12].sum(dim=-1, keepdims=true),
+                                ta[:,10:12].sum(dim=-1, keepdims=True),
                                 ta[:,12:13],
-                                ta[:,13:15].sum(dim=-1, keepdims=true),
+                                ta[:,13:15].sum(dim=-1, keepdims=True),
                                 ta[:,15:16],
-                                ta[:,16:18].sum(dim=-1, keepdims=true)], dim=-1)
+                                ta[:,16:18].sum(dim=-1, keepdims=True)], dim=-1)
         if trainer.current_epoch == 0:
             ta[:,0] = 1
             ta[:,1:] = 0

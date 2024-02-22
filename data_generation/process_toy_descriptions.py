@@ -139,7 +139,7 @@ if __name__ == '__main__':
     model_name = 'sentence-transformers/all-MiniLM-L6-v2'
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     # Specify your dataset paths
-    path = '/home/gkounto/BISCUIT/data_generation/data/gridworld_simplified_18c_3d/'
+    path = '/home/gkounto/BISCUIT/data_generation/data/gridworld_simplified_12c_3d/'
     
     for split in ['train', 'val', 'test', 'test_indep', 'val_indep']:
         process_dataset(path, split, tokenizer, GRAMMAR)
