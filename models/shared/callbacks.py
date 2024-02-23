@@ -40,7 +40,7 @@ class NextStepCallback(pl.Callback):
         if (trainer.current_epoch + 1) % self.every_n_epochs != 0:
             return
 
-        
+        images = []
         # # Get a batch of data
         # batch = next(iter(trainer.val_dataloaders))
         # # batch = batch[:self.num_samples]  # Limit the number of samples to log
@@ -90,20 +90,27 @@ class NextStepCallback(pl.Callback):
             if torch.any(action < 0):
                 pass
             else:
+<<<<<<< HEAD
                 action_image[:, max(0, pixel_y-5):pixel_y+6, max(0, pixel_x-5):pixel_x+6] = 1.0  # Assuming action is normalized
             images_to_log.insert(1, action_image.cpu())  # Insert action image after the previous frame
+=======
+                action_image[:, max(0, pixel_y-5):pixel_y+6, max(0, pixel_x-5):pixel_x+6] = 1.0 
+            images_to_log.insert(1, action_image.cpu())
+>>>>>>> 6e59139 (callbacks fix)
 
             # Optionally add an exclamation mark image if there's a notable difference
             if include_exclamation_mark:
                 exclamation_mark_image = self.create_exclamation_mark_image().transpose(2,0,1)
                 exclamation_mark_image = torch.from_numpy(exclamation_mark_image).float()
                 images_to_log.append(exclamation_mark_image)
+            
+            images.append(images_to_log)
 
-            # Convert list of tensors to a grid
-            images_grid = make_grid(images_to_log, nrow=len(images_to_log), pad_value=1)  # Use pad_value to add space between
+        # Convert list of tensors to a grid
+        images_grid = make_grid(images, nrow=self.num_samples, pad_value=1.0)
 
-            # Log the image grid to wandb
-            wandb.log({f"{self.split_name}_image_grid": [wandb.Image(images_grid, caption="Frame Sequence")]}, step=trainer.global_step)
+        # Log the image grid to wandb
+        wandb.log({f"{self.split_name}_image_grid": [wandb.Image(images_grid, caption="Frame Sequence")]}, step=trainer.global_step)
 
     
     def create_exclamation_mark_image(self, size=256, background_color=(1, 1, 1), mark_color=(1, 0, 0), mark_thickness=10, mark_height=100, dot_radius=10):
@@ -786,6 +793,13 @@ class InteractionVisualizationCallback(pl.Callback):
             else:
                 best_acc = accs.max(axis=0).mean()
                 var_assignments = np.argmax(accs, axis=1)
+            accs_max = accs.max(axis=0)
+            accs_names = pl_module.hparams.causal_var_info.keys()
+            accs_dict = dict(zip(accs_names, accs_max))
+            if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+                trainer.logger.experiment.log(f'best_accs_{self.prefix}', accs_dict, step=trainer.global_step)
+            else:
+                wandb.log({'accs/' + key: val for key, val in accs_dict.items()}, step=trainer.global_step + 100 if is_test else trainer.global_step)
             if not isinstance(trainer.logger, pl.loggers.WandbLogger):
                 trainer.logger.experiment.add_scalar(f'{self.prefix}interaction_match_f1', best_acc, global_step=trainer.global_step)
             else:
