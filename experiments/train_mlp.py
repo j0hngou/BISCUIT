@@ -92,6 +92,8 @@ if __name__ == '__main__':
         'correlation_dataset': datasets['val'],
         'correlation_test_dataset': datasets['test']
     }
+    if model_class == BISCUITMLP and 'action' in data_loaders:
+        callback_kwargs['action_data_loader'] = data_loaders['action']
     model_args['logger_name'] = logger_name
     check_val_every_n_epoch = model_args.pop('check_val_every_n_epoch', 1)
     if check_val_every_n_epoch <= 0:
