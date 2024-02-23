@@ -119,7 +119,7 @@ class BISCUITMLP(BISCUITVAE):
         if len(batch) == 2:
             x_enc, action = batch
         elif len(batch) == 3:
-            x_enc, action, intv_targets = batch
+            x_enc, action, intv_targets = batch 
         elif len(batch) == 5:
             x_enc, action, input_ids, token_type_ids, attention_mask = batch
         else:
@@ -160,6 +160,8 @@ class BISCUITMLP(BISCUITVAE):
         self.log(f'{mode}_nll', nll.mean())
         self.log(f'{mode}_mlp_loss_reg', mlp_loss_reg)
 
+        self.momentum_update_target_encoder()
+        
         return loss
 
     def configure_optimizers(self):
