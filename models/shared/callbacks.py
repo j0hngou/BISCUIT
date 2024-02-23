@@ -654,7 +654,9 @@ class PermutationCorrelationMetricsLogCallback(CorrelationMetricsLogCallback):
         elif isinstance(self.dataset, GridworldDataset):
             if ta.shape[1] == 5:
                 ta = torch.cat([ta[:,:2].sum(dim=-1, keepdims=True),
-                                ta[:,2:]], dim=-1)
+                                ta[:,2:4]],
+                                ta[:,4:5],
+                ).sum(dim=-1, keepdims=True)
             elif ta.shape[1] == 10:
                 ta = torch.cat([ta[:,:2].sum(dim=-1, keepdims=True),
                                 ta[:, 2:4],

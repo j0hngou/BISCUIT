@@ -57,6 +57,7 @@ class BISCUITMLP(BISCUITVAE):
         """
         Initializes the BISCUITMLP model with MLP-based architecture.
         """
+        kwargs['no_encoder_decoder'] = True  # We do not need any additional en- or decoder
         kwargs['use_flow_prior'] = False
         super().__init__(*args, **kwargs)
 
@@ -150,11 +151,14 @@ class BISCUITMLP(BISCUITVAE):
                                              intv_targets=intv_targets if len(batch) == 3 else None,
                                              action=action.flatten(0, 1))
         # NLL is the full loss
-        loss = nll
+        mlp_loss_reg = z_t.flatten(0, 1).pow(2).mean() + z_t1.flatten(0, 1).pow(2).mean()
+        # Penalize off-diagonal elements of the covariance matrix TODO
+        loss = nll + mlp_loss_reg
         loss = (loss * (seq_len - 1)).mean()
 
         # Logging
         self.log(f'{mode}_nll', nll.mean())
+        self.log(f'{mode}_mlp_loss_reg', mlp_loss_reg)
 
         return loss
 

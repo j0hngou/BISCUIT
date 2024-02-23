@@ -73,9 +73,7 @@ if __name__ == '__main__':
     model_args['max_iters'] = args.max_epochs * len(data_loaders['train'])
     model_args['text'] = args.text
     model_args['text_only'] = args.text_only
-    model_args['stop_grad'] = args.stop_grad
     model_args['noise_level'] = args.noise_level
-
     model_class = BISCUITMLP
     textornot = 'text' if args.text else 'notext'
     textornot += '_textonly' if args.text_only else ''
