@@ -86,10 +86,12 @@ class NextStepCallback(pl.Callback):
             # action_image = (action_image + 1.0) / 2.0  # Convert to 0-1 range
             pixel_x = int(action[0].item() * (action_image.shape[1] - 1))
             pixel_y = int(action[1].item() * (action_image.shape[2] - 1))
+            # If any actions are negative, ignore the pixel
             if torch.any(action < 0):
                 pass
             else:
-                action_image[:, max(0, pixel_y-5):pixel_y+6, max(0, pixel_x-5):pixel_x+6] = 1.0 
+                action_image[:, max(0, pixel_y-5):pixel_y+6, max(0, pixel_x-5):pixel_x+6] = 1.0  # Assuming action is normalized
+            images_to_log.insert(1, action_image.cpu())  # Insert action image after the previous frame
 
             # Optionally add an exclamation mark image if there's a notable difference
             if include_exclamation_mark:
@@ -787,6 +789,11 @@ class InteractionVisualizationCallback(pl.Callback):
                 trainer.logger.experiment.add_scalar(f'{self.prefix}interaction_match_f1', best_acc, global_step=trainer.global_step)
             else:
                 wandb.log({f'{self.prefix}interaction_match_f1': best_acc}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+            accuracies_dict = dict(zip(('accs/' + x for x in pl_module.hparams.var_names), accs.max(axis=0)))
+            if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+                trainer.logger.experiment.log(accuracies_dict, step=trainer.global_step)
+            else:
+                wandb.log(accuracies_dict, step=trainer.global_step + 100 if is_test else trainer.global_step)
             self.all_match_accuracies.append(best_acc)
             self.report_to_trial(trainer, best_acc)
             prior_module.set_variable_alignments(var_assignments)
