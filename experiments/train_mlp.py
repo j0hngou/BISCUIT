@@ -56,6 +56,7 @@ if __name__ == '__main__':
     parser.add_argument('--perfect_intv', default=False, action="store_true")
     parser.add_argument('--text_only', default=False, action="store_true")
     parser.add_argument('--num_samples', type=int, default=2)
+    parser.add_argument('--noise_level', type=float, default=0.05)
 
 
     args = parser.parse_args()
@@ -73,6 +74,8 @@ if __name__ == '__main__':
     model_args['text'] = args.text
     model_args['text_only'] = args.text_only
     model_args['stop_grad'] = args.stop_grad
+    model_args['noise_level'] = args.noise_level
+
     model_class = BISCUITMLP
     textornot = 'text' if args.text else 'notext'
     textornot += '_textonly' if args.text_only else ''
