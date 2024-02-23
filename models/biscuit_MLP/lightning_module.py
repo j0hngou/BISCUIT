@@ -59,6 +59,7 @@ class BISCUITMLP(BISCUITVAE):
         """
         kwargs['no_encoder_decoder'] = True  # We do not need any additional en- or decoder
         kwargs['use_flow_prior'] = False
+        kwargs['text'] = text
         super().__init__(*args, **kwargs)
 
         # Basic settings
