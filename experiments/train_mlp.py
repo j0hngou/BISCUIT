@@ -65,12 +65,18 @@ if __name__ == '__main__':
 
     model_args['data_folder'] = [s for s in args.data_dir.split('/') if len(s) > 0][-1]
     model_args['img_width'] = datasets['train'].get_img_width()
+    model_args['text'] = args.text
+    model_args['num_samples'] = args.num_samples
     if hasattr(datasets['train'], 'action_size'):
         model_args['action_size'] = datasets['train'].action_size()
     model_args['max_iters'] = args.max_epochs * len(data_loaders['train'])
-
+    model_args['text'] = args.text
+    model_args['text_only'] = args.text_only
+    model_args['stop_grad'] = args.stop_grad
     model_class = BISCUITMLP
-    logger_name = f'BISCUITMLP_{args.num_latents}l_{datasets["train"].num_vars()}b_{args.c_hid}hid_{data_name}'
+    textornot = 'text' if args.text else 'notext'
+    textornot += '_textonly' if args.text_only else ''
+    logger_name = f'BISCUITMLP_{args.num_latents}l_{datasets["train"].num_vars()}b_{args.c_hid}hid_{data_name}_{textornot}'
 
     if args.wandb:
         run = wandb.init(project="BISCUITMLP", name=logger_name, config=model_args, dir=os.path.join('/scratch-shared', 'wandb'))
