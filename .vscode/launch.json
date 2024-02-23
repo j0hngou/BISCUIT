@@ -14,9 +14,10 @@
 				"--data_dir", "/home/john/PhD/BISCUIT/data/gridworld_simplified_5c/",
 				"--autoencoder_checkpoint", "/home/john/PhD/BISCUIT/pretrained_models/AE_gridworld_simplified/AE_20l_64hid.ckpt",
 				"--num_latents", "20",
-				"--c_hid", "128",
-				"--num_flows", "6",
-				"--lr", "3e-3",
+				"--c_hid", "256",
+				"--num_blocks", "12",
+				"--lr", "1e-3",
+				"--lr_text", "1e-4",
 				"--num_samples", "2",
 				"--batch_size", "64",
 				"--warmup", "100",
@@ -24,8 +25,6 @@
 				"--subsample_percentage", "0.05",
 				"--max_epochs", "400",
 				"--text",
-				"--text_only",
-				"--stop_grad",
 			]
 		}
 	]
