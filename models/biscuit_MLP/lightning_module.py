@@ -113,7 +113,8 @@ class BISCUITMLP(BISCUITVAE):
         """
         with torch.no_grad():
             for param_q, param_k in zip(self.input_encoder.parameters(), self.target_encoder.parameters()):
-                param_k.data = momentum * param_k.data + (1.0 - momentum) * param_q.data
+                param_k.data.mul_(momentum).add_((1 - momentum) * param_q.data)
+                # param_k.data = momentum * param_k.data + (1.0 - momentum) * param_q.data
 
     def _get_loss(self, batch, mode='train'):
         """ Main training method for calculating the loss """
@@ -140,14 +141,14 @@ class BISCUITMLP(BISCUITVAE):
         else:
             tokenized_description = None
         # Execute the flow
-        z_t1 = self.target_encoder(x_t1_flat).detach()
-        z_t1 = z_t1.unflatten(0, (batch_size, seq_len-1, num_samples))
         z_t = self.input_encoder(x_t_flat)
         z_t = z_t.unflatten(0, (batch_size, 1, num_samples))
-        z_sample = torch.cat([z_t, z_t1], dim=1)
+        z_t1 = self.target_encoder(x_t1_flat)
+        z_t1 = z_t1.unflatten(0, (batch_size, seq_len-1, num_samples))
+        # z_sample = torch.cat([z_t, z_t1], dim=1)
         # Calculate the negative log likelihood of the transition prior
-        nll = self.prior_t1.sample_based_nll(z_t=z_sample[:,:-1].flatten(0, 1),
-                                             z_t1=z_sample[:,1:].flatten(0, 1),
+        nll = self.prior_t1.sample_based_nll(z_t=z_t.flatten(0, 1),
+                                             z_t1=z_t1.flatten(0, 1),
                                              tokenized_description=tokenized_description,
                                              intv_targets=intv_targets if len(batch) == 3 else None,
                                              action=action.flatten(0, 1))
@@ -169,15 +170,41 @@ class BISCUITMLP(BISCUITVAE):
         """
         Configures the optimizer and scheduler for training.
         """
-        if self.text:
-            # Optimizer setup for text processing
-            optimizer = AdamW([{'params': self.input_encoder.parameters(), 'lr': self.hparams.lr},
-                               {'params': self.target_encoder.parameters(), 'lr': self.hparams.lr_text}],
-                              lr=self.hparams.lr, weight_decay=0.01)
-        else:
-            optimizer = AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=0.01)
+        # if self.text:
+        #     # Optimizer setup for text processing
+        #     optimizer = AdamW([{'params': self.input_encoder.parameters(), 'lr': self.hparams.lr},
+        #                        {'params': self.target_encoder.parameters(), 'lr': self.hparams.lr_text}],
+        #                       lr=self.hparams.lr, weight_decay=0.01)
+        # else:
+        #     optimizer = AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=0.01)
 
-        lr_scheduler = CosineWarmupScheduler(optimizer, warmup=self.hparams.warmup, max_iters=self.hparams.max_iters)
+        # lr_scheduler = CosineWarmupScheduler(optimizer, warmup=self.hparams.warmup, max_iters=self.hparams.max_iters)
+        # return [optimizer], [{'scheduler': lr_scheduler, 'interval': 'step'}]
+        if self.text:
+            prior_text_params = list(self.prior_t1.text_MLP.parameters())
+            prior_t1_params = list(self.prior_t1.parameters())
+            mlp_params = list(self.input_encoder.parameters())
+
+            all_params = prior_t1_params + mlp_params
+
+            # if self.hparams.prior_action_add_prev_state:
+            #     action_MLP_params = list(self.prior_t1.action_MLP.parameters())
+            #     all_params += action_MLP_params
+
+            prior_text_params_set = set(prior_text_params)
+            all_params_set = set(all_params)
+            rest_params = list(all_params_set - prior_text_params_set)
+
+            optimizer = AdamW([{'params': prior_text_params, 'lr': self.hparams.lr_text, 'weight_decay': 0.01},
+                            {'params': rest_params, 'lr': self.hparams.lr}],
+                            lr=self.hparams.lr, weight_decay=0.0)
+
+        else:
+            optimizer = AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=0.0)
+        lr_scheduler = CosineWarmupScheduler(optimizer,
+                                            warmup=self.hparams.warmup,
+                                            max_iters=self.hparams.max_iters)
+
         return [optimizer], [{'scheduler': lr_scheduler, 'interval': 'step'}]
 
     @staticmethod
