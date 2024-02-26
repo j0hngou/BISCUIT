@@ -841,77 +841,77 @@ class InteractionVisualizationCallback(pl.Callback):
                     raise NotImplementedError
                     
                     
-            for i in range(0, xy.shape[0], 4096):
-                outs.append(prior_module.get_interaction_quantization(xy[i:i+4096], soft=True, tokenized_description=description_dummy if prior_module.text else None, tokenized=tokenized))
-            pred_intv = torch.cat(outs, dim=0)
-            pred_intv = pred_intv.unflatten(0, (x.shape[0], y.shape[0])).cpu().numpy()
-            if not isinstance(trainer.logger, pl.loggers.WandbLogger):
-                os.makedirs(os.path.join(trainer.logger.log_dir, 'interaction_matches'), exist_ok=True)
-            else:
-                os.makedirs(os.path.join(wandb.run.dir, 'interaction_matches'), exist_ok=True)
-            extra_save_args = {}
-            if hasattr(pl_module.prior_t1, 'last_batch_prev_state') and pl_module.prior_t1.last_batch_prev_state is not None:
-                prev_state = pl_module.prior_t1.last_batch_prev_state[0:1]
-                extra_save_args['prev_state'] = prev_state[0].cpu().numpy()
-                if hasattr(pl_module, 'autoencoder'):
-                    ae_latents = pl_module.flow.reverse(prev_state)
-                    ae_rec = pl_module.autoencoder.decoder(ae_latents).cpu().numpy()
-                    ae_rec = (ae_rec + 1.0) / 2.0
-                    ae_rec = ae_rec[0].transpose(1, 2, 0)
-                    extra_save_args['prev_img'] = ae_rec
-            if not isinstance(trainer.logger, pl.loggers.WandbLogger):
-                np.savez_compressed(os.path.join(trainer.logger.log_dir, 'interaction_matches',
-                                                f'{self.prefix}interaction_matches_{str(trainer.current_epoch).zfill(5)}.npz'), 
-                                    pred_intv=pred_intv, **extra_save_args)
-            else:
-                np.savez_compressed(os.path.join(wandb.run.dir, 'interaction_matches',
-                                                f'{self.prefix}interaction_matches_{str(trainer.current_epoch).zfill(5)}.npz'), 
-                                    pred_intv=pred_intv, **extra_save_args)
-            pred_intv = (pred_intv > 0).astype(np.int32)
+            # for i in range(0, xy.shape[0], 4096):
+            #     outs.append(prior_module.get_interaction_quantization(xy[i:i+4096], soft=True, tokenized_description=description_dummy if prior_module.text else None, tokenized=tokenized))
+            # pred_intv = torch.cat(outs, dim=0)
+            # pred_intv = pred_intv.unflatten(0, (x.shape[0], y.shape[0])).cpu().numpy()
+            # if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+            #     os.makedirs(os.path.join(trainer.logger.log_dir, 'interaction_matches'), exist_ok=True)
+            # else:
+            #     os.makedirs(os.path.join(wandb.run.dir, 'interaction_matches'), exist_ok=True)
+            # extra_save_args = {}
+            # if hasattr(pl_module.prior_t1, 'last_batch_prev_state') and pl_module.prior_t1.last_batch_prev_state is not None:
+            #     prev_state = pl_module.prior_t1.last_batch_prev_state[0:1]
+            #     extra_save_args['prev_state'] = prev_state[0].cpu().numpy()
+            #     if hasattr(pl_module, 'autoencoder'):
+            #         ae_latents = pl_module.flow.reverse(prev_state)
+            #         ae_rec = pl_module.autoencoder.decoder(ae_latents).cpu().numpy()
+            #         ae_rec = (ae_rec + 1.0) / 2.0
+            #         ae_rec = ae_rec[0].transpose(1, 2, 0)
+            #         extra_save_args['prev_img'] = ae_rec
+            # if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+            #     np.savez_compressed(os.path.join(trainer.logger.log_dir, 'interaction_matches',
+            #                                     f'{self.prefix}interaction_matches_{str(trainer.current_epoch).zfill(5)}.npz'), 
+            #                         pred_intv=pred_intv, **extra_save_args)
+            # else:
+            #     np.savez_compressed(os.path.join(wandb.run.dir, 'interaction_matches',
+            #                                     f'{self.prefix}interaction_matches_{str(trainer.current_epoch).zfill(5)}.npz'), 
+            #                         pred_intv=pred_intv, **extra_save_args)
+            # pred_intv = (pred_intv > 0).astype(np.int32)
             
-            num_vars = pred_intv.shape[-1]
-            img = np.zeros((resolution, resolution, 3), dtype=np.float32)
-            counts = np.zeros((resolution, resolution, num_vars))
-            hues = [hsv_to_rgb([i/num_vars*0.9, 1.0, 1.0]) for i in range(num_vars)]
-            for i in range(num_vars):
-                ind = pred_intv[...,i]
-                if prior_module.allow_sign_flip() and ind.mean() > 0.5:
-                    ind = 1 - ind
-                img += ind[...,None] * hues[i][None,None]
-                counts[:,:,i] = ind
+            # num_vars = pred_intv.shape[-1]
+            # img = np.zeros((resolution, resolution, 3), dtype=np.float32)
+            # counts = np.zeros((resolution, resolution, num_vars))
+            # hues = [hsv_to_rgb([i/num_vars*0.9, 1.0, 1.0]) for i in range(num_vars)]
+            # for i in range(num_vars):
+            #     ind = pred_intv[...,i]
+            #     if prior_module.allow_sign_flip() and ind.mean() > 0.5:
+            #         ind = 1 - ind
+            #     img += ind[...,None] * hues[i][None,None]
+            #     counts[:,:,i] = ind
 
-            counts_sum = counts.sum(axis=-1, keepdims=True)
-            img = img / np.maximum(counts_sum, 1)
-            img += (counts_sum == 0) * np.array([[[0.9, 0.9, 0.9]]])
+            # counts_sum = counts.sum(axis=-1, keepdims=True)
+            # img = img / np.maximum(counts_sum, 1)
+            # img += (counts_sum == 0) * np.array([[[0.9, 0.9, 0.9]]])
 
-            unique_combs, unq_counts = np.unique(counts.reshape(-1, num_vars), axis=0, return_counts=True)
-            unique_combs = unique_combs[np.argsort(-unq_counts)]
-            unique_combs = unique_combs[unique_combs.sum(axis=-1) > 1]
+            # unique_combs, unq_counts = np.unique(counts.reshape(-1, num_vars), axis=0, return_counts=True)
+            # unique_combs = unique_combs[np.argsort(-unq_counts)]
+            # unique_combs = unique_combs[unique_combs.sum(axis=-1) > 1]
 
-            handle_names = [f'Latent {i}' for i in range(len(hues)) if counts[:,:,i].sum() > 0]
-            for comb in unique_combs[:10]:
-                latent_idxs = np.where(comb == 1)[0]
-                if latent_idxs.shape[0] > 5:
-                    continue
-                new_hue = sum([hues[i] for i in latent_idxs]) / comb.sum()
-                hues.append(new_hue)
-                handle_names.append(f'Latents {"&".join([str(i) for i in latent_idxs])}')
+            # handle_names = [f'Latent {i}' for i in range(len(hues)) if counts[:,:,i].sum() > 0]
+            # for comb in unique_combs[:10]:
+            #     latent_idxs = np.where(comb == 1)[0]
+            #     if latent_idxs.shape[0] > 5:
+            #         continue
+            #     new_hue = sum([hues[i] for i in latent_idxs]) / comb.sum()
+            #     hues.append(new_hue)
+            #     handle_names.append(f'Latents {"&".join([str(i) for i in latent_idxs])}')
 
-            fig = plt.figure(figsize=(6, 6), dpi=150)
-            if len(handle_names) < 10:
-                plt.legend(handles=[Patch(facecolor=color, label=label) for color, label in zip(hues, handle_names)], loc='center')
-            img = img.clip(0.0, 1.0)
-            plt.imshow(img)
-            plt.axis('off')
-            plt.title('Learned space partitioning')
-            fig.tight_layout()
-            if not isinstance(trainer.logger, pl.loggers.WandbLogger):
-                trainer.logger.experiment.add_figure(f'{self.prefix}interaction_partitioning', fig, global_step=trainer.global_step)
-                trainer.logger.experiment.add_image(f'{self.prefix}interaction_partitioning_clean', img, global_step=trainer.global_step, dataformats='HWC')
-            else:
-                wandb.log({f'{self.prefix}interaction_partitioning': wandb.Image(fig)}, step=trainer.global_step + 100 if is_test else trainer.global_step)
-                wandb.log({f'{self.prefix}interaction_partitioning_clean': wandb.Image(img, caption='Learned space partitioning')}, step=trainer.global_step + 100 if is_test else trainer.global_step)
-            plt.close(fig)
+            # fig = plt.figure(figsize=(6, 6), dpi=150)
+            # if len(handle_names) < 10:
+            #     plt.legend(handles=[Patch(facecolor=color, label=label) for color, label in zip(hues, handle_names)], loc='center')
+            # img = img.clip(0.0, 1.0)
+            # plt.imshow(img)
+            # plt.axis('off')
+            # plt.title('Learned space partitioning')
+            # fig.tight_layout()
+            # if not isinstance(trainer.logger, pl.loggers.WandbLogger):
+            #     trainer.logger.experiment.add_figure(f'{self.prefix}interaction_partitioning', fig, global_step=trainer.global_step)
+            #     trainer.logger.experiment.add_image(f'{self.prefix}interaction_partitioning_clean', img, global_step=trainer.global_step, dataformats='HWC')
+            # else:
+            #     wandb.log({f'{self.prefix}interaction_partitioning': wandb.Image(fig)}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+            #     wandb.log({f'{self.prefix}interaction_partitioning_clean': wandb.Image(img, caption='Learned space partitioning')}, step=trainer.global_step + 100 if is_test else trainer.global_step)
+            # plt.close(fig)
 
     def on_test_epoch_start(self, trainer, pl_module):
         old_prefix = self.prefix

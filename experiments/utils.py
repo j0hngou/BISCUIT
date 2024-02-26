@@ -126,7 +126,7 @@ def load_datasets(args):
                                    triplet=False,
                                    return_targets=True,
                                    return_text=args.text,
-                                   subsample_percentage=0.1,
+                                   subsample_percentage=1.0,
                                    **dataset_args
                                    )
         action_loader = data.DataLoader(action_dataset,
