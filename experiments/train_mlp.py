@@ -57,6 +57,8 @@ if __name__ == '__main__':
     parser.add_argument('--text_only', default=False, action="store_true")
     parser.add_argument('--num_samples', type=int, default=2)
     parser.add_argument('--noise_level', type=float, default=0.05)
+    parser.add_argument('--mlp_c_hid', type=int, default=128)
+    parser.add_argument('--prior_params_lr', type=float, default=1e-3)
 
 
     args = parser.parse_args()
@@ -74,6 +76,8 @@ if __name__ == '__main__':
     model_args['text'] = args.text
     model_args['text_only'] = args.text_only
     model_args['noise_level'] = args.noise_level
+    model_args['mlp_c_hid'] = args.mlp_c_hid
+    model_args['prior_params_lr'] = args.prior_params_lr
     model_class = BISCUITMLP
     textornot = 'text' if args.text else 'notext'
     textornot += '_textonly' if args.text_only else ''

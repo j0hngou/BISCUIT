@@ -60,6 +60,7 @@ class BISCUITMLP(BISCUITVAE):
         kwargs['no_encoder_decoder'] = True  # We do not need any additional en- or decoder
         kwargs['use_flow_prior'] = False
         kwargs['text'] = text
+        mlp_c_hid = kwargs.get('mlp_c_hid', 512)
         super().__init__(*args, **kwargs)
 
         # Basic settings
@@ -69,7 +70,7 @@ class BISCUITMLP(BISCUITVAE):
 
         # Initialize the input and target MLP encoders
         self.input_encoder = MLP(self.hparams.num_latents, self.hparams.num_latents,
-                                 num_blocks=num_blocks, act_fn=act_fn)
+                                 num_blocks=num_blocks, act_fn=act_fn, hidden_dim=mlp_c_hid)
         self.target_encoder = deepcopy(self.input_encoder)
         for param in self.target_encoder.parameters():
             param.requires_grad_(False)
@@ -107,7 +108,7 @@ class BISCUITMLP(BISCUITVAE):
 
         return z_input, z_target
 
-    def momentum_update_target_encoder(self, momentum=0.999):
+    def momentum_update_target_encoder(self, momentum=0.996):
         """
         Updates the target encoder's weights as a moving average of the input encoder's weights.
         """
@@ -153,14 +154,14 @@ class BISCUITMLP(BISCUITVAE):
                                              intv_targets=intv_targets if len(batch) == 3 else None,
                                              action=action.flatten(0, 1))
         # NLL is the full loss
-        mlp_loss_reg = z_t.flatten(0, 1).pow(2).mean() + z_t1.flatten(0, 1).pow(2).mean()
+        # mlp_loss_reg = z_t.flatten(0, 1).pow(2).mean() + z_t1.flatten(0, 1).pow(2).mean()
         # Penalize off-diagonal elements of the covariance matrix TODO
-        loss = nll + mlp_loss_reg
+        loss = nll# + mlp_loss_reg
         loss = (loss * (seq_len - 1)).mean()
 
         # Logging
         self.log(f'{mode}_nll', nll.mean())
-        self.log(f'{mode}_mlp_loss_reg', mlp_loss_reg)
+        # self.log(f'{mode}_mlp_loss_reg', mlp_loss_reg)
 
         self.momentum_update_target_encoder()
         
@@ -192,11 +193,14 @@ class BISCUITMLP(BISCUITVAE):
             #     all_params += action_MLP_params
 
             prior_text_params_set = set(prior_text_params)
-            all_params_set = set(all_params)
-            rest_params = list(all_params_set - prior_text_params_set)
+            mlp_params_set = set(mlp_params)
+            prior_t1_params_set = set(prior_t1_params) - prior_text_params_set
+            # all_params_set = set(all_params)
+            # rest_params = list(all_params_set - prior_text_params_set)
 
             optimizer = AdamW([{'params': prior_text_params, 'lr': self.hparams.lr_text, 'weight_decay': 0.01},
-                            {'params': rest_params, 'lr': self.hparams.lr}],
+                               {'params': list(prior_t1_params_set), 'lr': self.hparams.prior_params_lr, 'weight_decay': 0.01},
+                               {'params': mlp_params, 'lr': self.hparams.lr, 'weight_decay': 0.01}],
                             lr=self.hparams.lr, weight_decay=0.0)
 
         else:
