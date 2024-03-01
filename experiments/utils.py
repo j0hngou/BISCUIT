@@ -74,6 +74,9 @@ def load_datasets(args):
         perfect_intv = args.perfect_intv
     if hasattr(args, 'text_only'):
         dataset_args['text_only'] = args.text_only
+    if hasattr(args, 'pass_gt_causals'):
+        dataset_args['pass_gt_causals'] = args.pass_gt_causals
+    dataset_args['transform_gt'] = args.transform_gt
     train_dataset = DataClass(
         data_folder=args.data_dir, split='train', return_targets=True if perfect_intv else False, single_image=False, triplet=False, seq_len=args.seq_len, cluster=args.cluster, return_text=args.text, subsample_percentage=args.subsample_percentage, **dataset_args)
     val_dataset = DataClass(
@@ -90,6 +93,7 @@ def load_datasets(args):
                                   shuffle=False, drop_last=False, num_workers=args.num_workers)
     test_seq_loader = data.DataLoader(test_seq_dataset, batch_size=args.batch_size,
                                   shuffle=False, drop_last=False, num_workers=args.num_workers)
+    
 
     print(f'Training dataset size: {len(train_dataset)} / {len(train_loader)}')
     print(f'Val sequence dataset size: {len(val_seq_dataset)} / {len(val_seq_loader)}')

@@ -37,7 +37,7 @@ def encode_dataset(model, datasets):
             encodings = dataset.encode_dataset(lambda batch: model.autoencoder.encoder(batch.to(model.device)).cpu())
             torch.save(encodings, encoding_filename)
         else:
-            dataset.load_encodings(encoding_filename)
+            dataset.load_encodings(encoding_filename, lambda batch: model.frozen_flow(batch.to(model.device))[0].cpu())
 
 
 if __name__ == '__main__':
@@ -65,6 +65,10 @@ if __name__ == '__main__':
     parser.add_argument('--text_only', default=False, action="store_true")
     parser.add_argument('--stop_grad', default=False, action="store_true")
     parser.add_argument('--noise_level', type=float, default=-1)
+    parser.add_argument('--pass_gt_causals', default=False, action="store_true")
+    parser.add_argument('--transform_gt', default=False, action="store_true")
+    parser.add_argument('--scale_latents', type=float, default=1.0)
+    parser.add_argument('--flow_init_std_factor', type=float, default=0.2)
 
     args = parser.parse_args()
     model_args = vars(args)
@@ -81,10 +85,12 @@ if __name__ == '__main__':
     model_args['text_only'] = args.text_only
     model_args['stop_grad'] = args.stop_grad
     model_args['noise_level'] = args.noise_level
+    model_args['pass_gt_causals'] = args.pass_gt_causals
+    model_args['flow_init_std_factor'] = args.flow_init_std_factor
     model_class = BISCUITNF
     textornot = 'text' if args.text else 'notext'
     textornot += '_textonly' if args.text_only else ''
-    logger_name = f'BISCUITNF_{args.num_latents}l_{datasets["train"].num_vars()}b_{args.c_hid}hid_{data_name}_{textornot}_ss{args.subsample_percentage}_sc{args.subsample_chunk}_{"perfect_intv" if args.perfect_intv else "est_intv"}_8s'
+    logger_name = f'BISCUITNF_{args.num_latents}l_{datasets["train"].num_vars()}b_{args.c_hid}hid_{data_name}_{textornot}_ss{args.subsample_percentage}_sc{args.subsample_chunk}_{"perfect_intv" if args.perfect_intv else "est_intv"}_numsamples{args.num_samples}_noiselvl{args.noise_level}_passgtcausals{args.pass_gt_causals}_transformgtcausals{args.transform_gt}_scalelatents{args.scale_latents}_frozenflowinitstd{args.flow_init_std_factor}'
     args_logger_name = model_args.pop('logger_name')
     if len(args_logger_name) > 0:
         logger_name += '/' + args_logger_name
