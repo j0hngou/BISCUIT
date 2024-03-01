@@ -1,0 +1,1 @@
+from models.beta_vae.lightning_module import BetaVAE

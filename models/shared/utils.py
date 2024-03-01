@@ -168,3 +168,18 @@ def log_matrix(matrix, trainer, name, current_epoch=None, log_dir=None):
         epochs = new_epoch
         values = new_val
     np.savez_compressed(filename, epochs=epochs, values=values)
+
+def compute_correlation_penalty(z):
+    """ Computes the correlation penalty for a set of latent variables"""
+    z_mean = z - z.mean(dim=0, keepdim=True)
+    
+    cov_matrix = torch.mm(z_mean.T, z_mean) / (z_mean.size(0) - 1)
+    
+    std_devs = torch.sqrt(torch.diag(cov_matrix))
+    corr_matrix = cov_matrix / torch.outer(std_devs, std_devs)
+    
+    corr_matrix.fill_diagonal_(0)
+    
+    penalty = torch.sum(corr_matrix ** 2)
+    
+    return penalty

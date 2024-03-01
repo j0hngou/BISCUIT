@@ -117,20 +117,36 @@ class Autoencoder(pl.LightningModule):
         else:
             imgs, actions = batch, None
         x_rec, z = self.forward(imgs, actions=actions, return_z=True)
-        # Check if all channels are close to 0 (black pixels)
-        # Adjust the tolerance level if needed
+        # Check for which pixels all channels are close to 0 (black pixels)
         is_black = torch.all(imgs <= 1e-6, dim=1, keepdim=True)
 
-        # Create a weight matrix based on the condition
         weights = torch.where(is_black, weighted_loss[0] * torch.ones_like(imgs), weighted_loss[1] * torch.ones_like(imgs))
 
-        # Calculate the weighted MSE loss
         loss_rec = torch.mean(weights * (x_rec - imgs) ** 2)
         # loss_rec = F.mse_loss(x_rec, imgs)
         loss_reg = (z ** 2).mean()
+        
+        corr_matrix_pearson = self._pearson_correlation(z)
+        corr_matrix_spearman = self._spearman_correlation(z)
+        
+        off_diagonal_mask = ~torch.eye(corr_matrix_pearson.size(0), dtype=bool, device=corr_matrix_pearson.device)
+        corr_loss_pearson = corr_matrix_pearson.abs()[off_diagonal_mask].mean()
+        corr_loss_spearman = corr_matrix_spearman.abs()[off_diagonal_mask].mean()
+
+        corr_reg_weight = self.hparams.get('corr_reg_weight', 0.0)
+        hsic_reg_weight = self.hparams.get('hsic_reg_weight', 0.0)
+        
+        hsic_loss = self.hsic_loss(z)
+        
         self.log(f'{mode}_loss_rec', loss_rec)
         self.log(f'{mode}_loss_reg', loss_reg)
         self.log(f'{mode}_loss_reg_weighted', loss_reg * self.hparams.regularizer_weight)
+        self.log(f'{mode}_loss_corr_pearson', corr_loss_pearson)
+        self.log(f'{mode}_loss_corr_spearman', corr_loss_spearman)
+        self.log(f'{mode}_loss_corr_pearson_weighted', corr_loss_pearson * corr_reg_weight)
+        self.log(f'{mode}_loss_corr_spearman_weighted', corr_loss_spearman * corr_reg_weight)
+        self.log(f'{mode}_loss_hsic', hsic_loss)
+        self.log(f'{mode}_loss_hsic_weighted', hsic_loss * hsic_reg_weight)
         with torch.no_grad():
             self.log(f'{mode}_loss_rec_mse', F.mse_loss(x_rec, imgs))
             self.log(f'{mode}_loss_rec_abs', torch.abs(x_rec - imgs).mean())
@@ -140,7 +156,7 @@ class Autoencoder(pl.LightningModule):
             self.log(f'{mode}_loss_rec_smaller_01', (noncompressed_rec < 0.1).float().mean())
             self.log(f'{mode}_loss_rec_smaller_001', (noncompressed_rec < 0.01).float().mean())
             self.log(f'{mode}_loss_rec_smaller_0001', (noncompressed_rec < 0.001).float().mean())
-        loss = loss_rec + loss_reg * self.hparams.regularizer_weight
+        loss = loss_rec + loss_reg * self.hparams.regularizer_weight + corr_loss_pearson * corr_reg_weight + corr_loss_spearman * corr_reg_weight + hsic_loss * hsic_reg_weight
 
         if self.action_mi_estimator is not None and mode == 'train':
             # Mutual information regularization
@@ -150,25 +166,52 @@ class Autoencoder(pl.LightningModule):
             self.log(f'{mode}_loss_mi_reg_latents', loss_mi_reg_latents)
             self.log(f'{mode}_loss_mi_reg_latents_weighted', loss_mi_reg_latents * self.hparams.mi_reg_weight)
         return loss
+    
+    def _pearson_correlation(self, x):
+        """
+        Compute Pearson correlation matrix for batch of latent variables.
+        """
+        x = x - x.mean(dim=0)
+        cov = x.T @ x / (x.shape[0] - 1)
+        std = x.std(dim=0, unbiased=True)
+        corr_matrix = cov / torch.outer(std, std)
+        return corr_matrix
 
-    def _get_mi_reg_loss(self, z, actions):
-        # Mutual information regularization
-        z = z + torch.randn_like(z) * self.hparams.noise_level
-        true_inp = torch.cat([z, actions], dim=-1)
-        perm = torch.randperm(z.shape[0], device=z.device)
-        fake_inp = torch.cat([z[perm], actions], dim=-1)
-        inp = torch.stack([true_inp, fake_inp], dim=1).flatten(0, 1)
-        model_out = self.action_mi_estimator(inp.detach()).reshape(z.shape[0], 2)
-        model_loss = -F.log_softmax(model_out, dim=1)[:,0].mean()
-        model_acc = (model_out[:,0] > model_out[:,1]).float().mean()
-        self.log('train_mi_reg_model_acc', model_acc)
+    def _spearman_correlation(self, x):
+        """
+        Compute Spearman's rank correlation matrix for batch of latent variables.
+        """
+        rank_x = x.argsort().argsort().to(torch.float32)
+        return self._pearson_correlation(rank_x)
+    
 
-        for p1, p2 in zip(self.action_mi_estimator.parameters(), self.action_mi_estimator_copy.parameters()):
-            p2.data.copy_(p1.data)
-        latents_out = self.action_mi_estimator_copy(inp).reshape(z.shape[0], 2)
-        latents_loss = -F.log_softmax(latents_out, dim=1).mean()
+    def rbf_kernel(X, sigma=None):
+        """
+        Computes the RBF (Gaussian) kernel matrix of X.
+        """
+        XX = X @ X.t()
+        X_sqnorms = torch.diag(XX)
+        R = X_sqnorms.unsqueeze(1) - 2*XX + X_sqnorms.unsqueeze(0)
+        if sigma is None:
+            sigma = torch.median(R[R > 0])
+        K = torch.exp(-R / (2 * sigma ** 2))
+        return K
 
-        return model_loss, latents_loss
+    def hsic_loss(Z, sigma=None):
+        """
+        Computes the HSIC value as a regularization term for the latent representations Z.
+        """
+        n = Z.size(0)
+        K = rbf_kernel(Z, sigma=sigma)
+        H = torch.eye(n) - 1.0/n * torch.ones((n, n))
+        H = H.to(Z.device)
+
+        HSIC = torch.trace(K @ H @ K @ H)
+        
+        HSIC /= (n-1) ** 2
+        
+        return HSIC
+
 
     def training_step(self, batch, batch_idx):
         loss = self._get_loss(batch, mode='train')

@@ -7,6 +7,30 @@ import numpy as np
 
 
 @torch.no_grad()
+def visualize_vae_reconstruction(model, images):
+    """Visualizes reconstructions of a VAE."""
+    reconst, *_ = model(images)
+    print(f"Input images shape: {images.shape}")
+    print(f"Reconstructed images shape: {reconst.shape}")
+
+    if images.dim() != reconst.dim():
+        raise ValueError(f"Input and reconstructed images must have the same number of dimensions. Got {images.dim()} and {reconst.dim()}.")
+
+    batch_size, c, h, w = images.shape
+    comparison = torch.zeros(batch_size, c, h, w * 2)
+    comparison = comparison.to(images.device)
+    
+    for i in range(batch_size):
+        comparison[i, :, :, :w] = images[i]  # Original image on the left
+        comparison[i, :, :, w:] = reconst[i]  # Corresponding reconstruction on the right
+    
+    img_grid = torchvision.utils.make_grid(comparison, nrow=1, normalize=True, pad_value=0.25, value_range=(-1, 1))
+    img_grid = img_grid.permute(1, 2, 0)
+    img_grid = img_grid.cpu().numpy()
+    return img_grid
+
+
+@torch.no_grad()
 def visualize_ae_reconstruction(model, images, actions=None):
     """ Plots reconstructions of an autoencoder """
     reconst = model(images, actions=actions)
