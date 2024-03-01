@@ -101,7 +101,10 @@ class NextStepCallback(pl.Callback):
             images.append(images_to_log)
 
         # Convert list of tensors to a grid
-        images_grid = make_grid(images, nrow=self.num_samples, pad_value=1.0)
+        # Turn images  to a list of tensors
+        # images = [torch.stack(image_list) for image_list in images]
+        
+        images_grid = make_grid(images_to_log, nrow=self.num_samples, pad_value=1.0)
 
         # Log the image grid to wandb
         wandb.log({f"{self.split_name}_image_grid": [wandb.Image(images_grid, caption="Frame Sequence")]}, step=trainer.global_step)

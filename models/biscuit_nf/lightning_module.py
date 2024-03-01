@@ -48,15 +48,26 @@ class BISCUITNF(BISCUITVAE):
                       Standard deviation of the added noise to the encodings.
                       If smaller than zero, the std of the autoencoder is used.
         """
-        kwargs['no_encoder_decoder'] = True  # We do not need any additional en- or decoder
+        kwargs['no_encoder_decoder'] = True
         super().__init__(*args, **kwargs)
         self.text = kwargs.get('text', False)
         self.stop_grad = kwargs.get('stop_grad', False)
+        self.scale_latents = kwargs.get('scale_latents', False)
+        self.flow_init_std_factor = kwargs.get('flow_init_std_factor', 0.2)
         # Initialize the flow
         self.flow = AutoregNormalizingFlow(self.hparams.num_latents, 
                                            self.hparams.num_flows,
                                            act_fn=get_act_fn(self.hparams.flow_act_fn),
                                            hidden_per_var=self.hparams.hidden_per_var)
+        self.pass_gt_causals = kwargs.get('pass_gt_causals', False)
+        if self.pass_gt_causals:
+            self.frozen_flow = AutoregNormalizingFlow(self.hparams.num_latents, 
+                                           self.hparams.num_flows,
+                                           act_fn=get_act_fn(self.hparams.flow_act_fn),
+                                           hidden_per_var=self.hparams.hidden_per_var,
+                                           init_std_factor=1.0).eval()
+            for p in self.frozen_flow.parameters():
+                p.requires_grad_(False)
         # Setup autoencoder
         if self.hparams.autoencoder_checkpoint is not None:
             self.autoencoder = Autoencoder.load_from_checkpoint(self.hparams.autoencoder_checkpoint)
@@ -88,10 +99,12 @@ class BISCUITNF(BISCUITVAE):
             x_enc, _, action = batch
         with torch.no_grad():
             # Expand encodings over samples and add noise to 'sample' from the autoencoder
-            # latent distribution
-            x_enc = x_enc[...,None,:].expand(-1, -1, self.hparams.num_samples, -1)
+            # latent distribution for the input but not for the target
+            x_enc = x_enc[...,None,:].expand(-1, -1, self.hparams.num_samples, -1) * self.hparams.scale_latents
             batch_size, seq_len, num_samples, num_latents = x_enc.shape
-            x_sample = x_enc + torch.randn_like(x_enc) * self.hparams.noise_level
+            # x_sample = x_enc + torch.randn_like(x_enc) * self.hparams.noise_level
+            x_sample = torch.cat([x_enc[:, 0:1, :, :] + torch.randn_like(x_enc[:, 0:1, :, :]) * self.hparams.noise_level,
+                                  x_enc[:, 1:, :, :]], dim=1)
             if self.stop_grad:
                 x_t = x_sample[:, 0:1, :, :].detach()
                 x_t1 = x_sample[:, 1:, :, :]

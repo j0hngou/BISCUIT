@@ -898,6 +898,8 @@ class GridworldDataset(Dataset):
         self.data_files = sorted(glob(os.path.join(data_folder, f'{split}', '*.npz')), key=lambda x: int(x.split('_')[-1].rstrip('.npz')))
         self.data_files = self.data_files[int(self.subsample_chunk * self.subsample_percentage * len(self.data_files)):int((self.subsample_chunk + 1) * self.subsample_percentage * len(self.data_files))]
         print(len(self.data_files))
+        self.pass_gt_causals = kwargs.get('pass_gt_causals', False)
+        self.transform_gt = kwargs.get('transform_gt')
         # self.indices = self.calculate_indices() #range(len(self.data_files) * (seq_len - 1))
 
         
@@ -1008,11 +1010,11 @@ class GridworldDataset(Dataset):
                 self.VAR_INFO[key] = 'categ_2'
 
     def encode_dataset(self, encode_func, batch_size=16):
-        # Function to encode the dataset using a provided encoding function
         encodings = None
         for idx in tqdm_track(range(0, self.imgs.shape[0], batch_size), desc='Encoding dataset...', leave=False):
             batch = self.imgs[idx:idx+batch_size]
-            batch = self._prepare_imgs(batch)
+            if not self.pass_gt_causals:
+                batch = self._prepare_imgs(batch)
             with torch.no_grad():
                 batch = encode_func(batch)
             if encodings is None:
@@ -1022,9 +1024,19 @@ class GridworldDataset(Dataset):
         self.encodings_active = True
         return encodings
 
-    def load_encodings(self, filename):
-        # Load precomputed encodings from a file
+    def load_encodings(self, filename, post_process_fn=None):
         self.imgs = torch.load(filename)
+        if self.pass_gt_causals:
+            num_latents = self.imgs.shape[-1]
+            self.imgs = self.latent_state
+            self.imgs = np.concatenate([self.imgs, torch.zeros(self.imgs.shape[0], num_latents - self.imgs.shape[1]) - 1.0], axis=1)
+            self.imgs = torch.from_numpy(self.imgs).float()
+            if self.transform_gt:
+                self.encode_dataset(post_process_fn)
+            else:
+                # apply min-max scaling to the orientations (they are in 0-3π/2 range, we want to scale them to 0-1)
+                orientation_indices = [i for i, key in enumerate(self.flattened_causals) if 'orientation' in key]
+                self.imgs[:, orientation_indices] = (self.imgs[:, orientation_indices] - 0.) / (3*np.pi/2 - 0.)
         self.encodings_active = True
 
     def _prepare_imgs(self, imgs):
