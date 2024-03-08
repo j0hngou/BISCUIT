@@ -34,6 +34,7 @@ if __name__ == '__main__':
     parser.add_argument('--files_to_save', type=str, nargs='+', default='')
     parser.add_argument('--subsample_percentage', type=float, default=1.0)
     parser.add_argument('--use_coordconv', action='store_true')
+    parser.add_argument('--beta', type=float, default=10.0)
 
     args = parser.parse_args()
     pl.seed_everything(args.seed)
@@ -73,7 +74,7 @@ if __name__ == '__main__':
         model_args['c_in'] = train_dataset.get_inp_channels()
     print(f'Image size: {model_args["img_width"]}')
     model_class = BetaVAE
-    logger_name = f'beta_VAE_{args.num_latents}l_{args.c_hid}hid'
+    logger_name = f'beta_VAE_{args.num_latents}l_{args.c_hid}hid_{args.beta}b'
     args_logger_name = model_args.pop('logger_name')
     if len(args_logger_name) > 0:
         logger_name += '/' + args_logger_name

@@ -90,13 +90,8 @@ class NextStepCallback(pl.Callback):
             if torch.any(action < 0):
                 pass
             else:
-<<<<<<< HEAD
                 action_image[:, max(0, pixel_y-5):pixel_y+6, max(0, pixel_x-5):pixel_x+6] = 1.0  # Assuming action is normalized
             images_to_log.insert(1, action_image.cpu())  # Insert action image after the previous frame
-=======
-                action_image[:, max(0, pixel_y-5):pixel_y+6, max(0, pixel_x-5):pixel_x+6] = 1.0 
-            images_to_log.insert(1, action_image.cpu())
->>>>>>> 6e59139 (callbacks fix)
 
             # Optionally add an exclamation mark image if there's a notable difference
             if include_exclamation_mark:
