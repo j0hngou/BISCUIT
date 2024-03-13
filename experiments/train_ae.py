@@ -73,7 +73,8 @@ if __name__ == '__main__':
         model_args['c_in'] = train_dataset.get_inp_channels()
     print(f'Image size: {model_args["img_width"]}')
     model_class = Autoencoder
-    logger_name = f'AE_{args.num_latents}l_{args.c_hid}hid'
+    data_dir_name = args.data_dir.split('/')[-1]
+    logger_name = f'AE_{args.num_latents}l_{args.c_hid}hid_{data_dir_name}'
     args_logger_name = model_args.pop('logger_name')
     if len(args_logger_name) > 0:
         logger_name += '/' + args_logger_name

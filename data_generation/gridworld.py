@@ -574,7 +574,8 @@ class Gridworld:
         return color_name
 
     def describe_action(self, causals, action):
-        ACTION_MAPPING = {1: 'turned left', 2: 'turned right', 3: 'turned up', 4: 'turned down', 5: 'changed the state of', 6: 'moved left', 7: 'moved right', 8: 'moved up', 9: 'moved down'}
+        # ACTION_MAPPING = {1: 'turned left', 2: 'turned right', 3: 'turned up', 4: 'turned down', 5: 'changed the state of', 6: 'moved left', 7: 'moved right', 8: 'moved up', 9: 'moved down'}
+        ACTION_MAPPING = {1: 'turn', 2: 'turn', 3: 'turn', 4: 'turn', 5: 'changed the state of', 6: 'move', 7: 'move', 8: 'move', 9: 'move'}
 
         if action == (-1, -1, -1):
             return "No action was performed."
@@ -654,23 +655,24 @@ class Gridworld:
                 else:
                     if random.random() < 0.3:
                         # Turn the car
-                        current_orientation = entity.orientation
-                        new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
-                        new_orientation = random.choice(new_orientation_choices)
-                        self.intervene(entity, 'turn', new_orientation=new_orientation)
-                        binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
-                        action_code = (entity.x, entity.y, ACTION_MAPPING[f'turn_{new_orientation}'])
+                        pass
+                        # current_orientation = entity.orientation
+                        # new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
+                        # new_orientation = random.choice(new_orientation_choices)
+                        # self.intervene(entity, 'turn', new_orientation=new_orientation)
+                        # binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
+                        # action_code = (entity.x, entity.y, ACTION_MAPPING[f'turn_{new_orientation}'])
                     else:
                         # Do nothing
                         pass
             else:
                 # Turn the car
-                current_orientation = entity.orientation
-                new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
-                new_orientation = random.choice(new_orientation_choices)
-                self.intervene(entity, 'turn', new_orientation=new_orientation)
-                binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
-                action_code = (entity.x, entity.y, ACTION_MAPPING[f'turn_{new_orientation}'])
+                # current_orientation = entity.orientation
+                # new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
+                # new_orientation = random.choice(new_orientation_choices)
+                # self.intervene(entity, 'turn', new_orientation=new_orientation)
+                # binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
+                # action_code = (entity.x, entity.y, ACTION_MAPPING[f'turn_{new_orientation}'])
                 pass
         if isinstance(entity, TrafficLight):
             # Change the state of the traffic light
@@ -821,7 +823,7 @@ class Gridworld:
         env_img = env_img.convert('RGB')
         return env_img
 
-    def randomly_initialize(self, car_colors, light_colors, boulder_colors, num_cars=5, num_lights=5, num_boulders=5, x_percent=80, y_percent=10, z_percent=30, fixed_light_positions=[]):
+    def randomly_initialize(self, car_colors, light_colors, boulder_colors, num_cars=5, num_lights=5, num_boulders=5, x_percent=80, y_percent=10, z_percent=30, fixed_light_positions=[], shuffle_cars=True):
         """
         Initializes the gridworld with a random configuration of vehicles, traffic lights, and obstacles.
 
@@ -848,54 +850,89 @@ class Gridworld:
         assert len(light_colors) >= num_lights, "Not enough unique light colors available."
         assert len(boulder_colors) >= num_boulders, "Not enough unique boulder colors available."
         
-        # Shuffle colors and create iterators
-        random.shuffle(car_colors)
-        # random.shuffle(light_colors)
-        random.shuffle(boulder_colors)
-
+        if shuffle_cars:
+            random.shuffle(car_colors)
         car_colors_iter = cycle(car_colors)
         light_colors_iter = cycle(light_colors)
         boulder_colors_iter = cycle(boulder_colors)
-        cars_used = 0
-        for (light_x, light_y, light_orientation) in fixed_light_positions:
-            light_color = next(light_colors_iter)
+
+        # Add cars and lights to the grid
+        if num_cars <= len(fixed_light_positions):
+            # Case a: Cars are fewer or equal to lights
+            for (light_x, light_y, light_orientation), car_color in zip(fixed_light_positions[:num_cars], car_colors):
+                car_orientation = self.get_opposite_orientation(light_orientation)
+                car_x, car_y = self.calculate_light_position(light_x, light_y, light_orientation, min_dist=x_percent, grid_size=grid_size)
+                vehicle = Vehicle(car_x, car_y, car_color, size=1, orientation=car_orientation, speed=1)
+                self.add_entity(vehicle)
+        else:
+            # Case b: Lights are fewer than cars
+            for (light_x, light_y, light_orientation), car_color in zip(fixed_light_positions, car_colors[:len(fixed_light_positions)]):
+                car_orientation = self.get_opposite_orientation(light_orientation)
+                car_x, car_y = self.calculate_light_position(light_x, light_y, light_orientation, min_dist=x_percent, grid_size=grid_size)
+                vehicle = Vehicle(car_x, car_y, car_color, size=1, orientation=car_orientation, speed=1)
+                self.add_entity(vehicle)
+
+            # Randomly place extra cars in empty spots on the grid
+            for car_color in car_colors[len(fixed_light_positions):num_cars]:
+                while True:
+                    x, y = np.random.randint(0, grid_size), np.random.randint(0, grid_size)
+                    if (x, y) not in self.entity_map:
+                        orientation = random.choice(['up', 'down', 'left', 'right'])
+                        vehicle = Vehicle(x, y, car_color, size=1, orientation=orientation, speed=1)
+                        self.add_entity(vehicle)
+                        break
+
+        for (light_x, light_y, light_orientation), light_color in zip(fixed_light_positions, light_colors_iter):
             light = TrafficLight(light_x, light_y, 'red', light_color, light_orientation, frequency=(100, 1))
             self.add_entity(light)
+        # # Shuffle colors and create iterators
+        # random.shuffle(car_colors)
+        # # random.shuffle(light_colors)
+        # random.shuffle(boulder_colors)
+
+        # car_colors_iter = cycle(car_colors)
+        # light_colors_iter = cycle(light_colors)
+        # boulder_colors_iter = cycle(boulder_colors)
+        # cars_used = 0
+        # for (light_x, light_y, light_orientation) in fixed_light_positions:
+        #     light_color = next(light_colors_iter)
+        #     light = TrafficLight(light_x, light_y, 'red', light_color, light_orientation, frequency=(100, 1))
+        #     self.add_entity(light)
             
-            if cars_used >= num_cars:
-                break
-            car_orientation = self.get_opposite_orientation(light_orientation)
-            car_x, car_y = self.calculate_light_position(light_x, light_y, light_orientation, min_dist=x_percent, grid_size=grid_size)
-            car_color = next(car_colors_iter)
-            vehicle = Vehicle(car_x, car_y, car_color, size=1, orientation=car_orientation, speed=1)
-            self.add_entity(vehicle)
-            cars_used += 1
+        #     if cars_used >= num_cars:
+        #         break
+        #     car_orientation = self.get_opposite_orientation(light_orientation)
+        #     car_x, car_y = self.calculate_light_position(light_x, light_y, light_orientation, min_dist=x_percent, grid_size=grid_size)
+        #     car_color = next(car_colors_iter)
+        #     vehicle = Vehicle(car_x, car_y, car_color, size=1, orientation=car_orientation, speed=1)
+        #     self.add_entity(vehicle)
+        #     cars_used += 1
 
-        for _ in range(num_cars - len(fixed_light_positions)):
-            orientation = random.choice(['up', 'down', 'left', 'right'])
-            min_dist = min_dist_from_edge(x_percent)
+        # for _ in range(num_cars - len(fixed_light_positions)):
+        #     orientation = random.choice(['up', 'down', 'left', 'right'])
+        #     min_dist = min_dist_from_edge(x_percent)
 
-            if orientation == 'up':
-                y = random.randint(min_dist, grid_size - 1)
-                x = random.randint(0, grid_size - 1)
-            elif orientation == 'down':
-                y = random.randint(0, grid_size - min_dist - 1)
-                x = random.randint(0, grid_size - 1)
-            elif orientation == 'left':
-                x = random.randint(min_dist, grid_size - 1)
-                y = random.randint(0, grid_size - 1)
-            else:  # right
-                x = random.randint(0, grid_size - min_dist - 1)
-                y = random.randint(0, grid_size - 1)
+        #     if orientation == 'up':
+        #         y = random.randint(min_dist, grid_size - 1)
+        #         x = random.randint(0, grid_size - 1)
+        #     elif orientation == 'down':
+        #         y = random.randint(0, grid_size - min_dist - 1)
+        #         x = random.randint(0, grid_size - 1)
+        #     elif orientation == 'left':
+        #         x = random.randint(min_dist, grid_size - 1)
+        #         y = random.randint(0, grid_size - 1)
+        #     else:  # right
+        #         x = random.randint(0, grid_size - min_dist - 1)
+        #         y = random.randint(0, grid_size - 1)
 
-            car_color = next(car_colors_iter)
-            vehicle = Vehicle(x, y, car_color, size=1, orientation=orientation, speed=1)
-            self.add_entity(vehicle)
+        #     car_color = next(car_colors_iter)
+        #     vehicle = Vehicle(x, y, car_color, size=1, orientation=orientation, speed=1)
+        #     self.add_entity(vehicle)
 
-            light_color = next(light_colors_iter)
-            light_x, light_y = self.calculate_light_position(x, y, orientation, min_dist=y_percent, grid_size=grid_size)
-            light = TrafficLight(light_x, light_y, 'red', light_color, self.get_opposite_orientation(orientation), frequency=(100, 1))
-            self.add_entity(light)
+        #     light_color = next(light_colors_iter)
+        #     light_x, light_y = self.calculate_light_position(x, y, orientation, min_dist=y_percent, grid_size=grid_size)
+        #     light = TrafficLight(light_x, light_y, 'red', light_color, self.get_opposite_orientation(orientation), frequency=(100, 1))
+        #     self.add_entity(light)
 
         occupied_positions = set(self.entity_map.keys())
 
@@ -903,7 +940,8 @@ class Gridworld:
             x, y = np.random.randint(0, grid_size), np.random.randint(0, grid_size)
             if random.randint(0, 100) < z_percent:
                 car = random.choice([entity for entity in self.entities if isinstance(entity, Vehicle)])
-                light_x, light_y = self.calculate_light_position(car.x, car.y, car.orientation, min_dist=y_percent, grid_size=grid_size)
+                # light_x, light_y = self.calculate_light_position(car.x, car.y, car.orientation, min_dist=y_percent, grid_size=grid_size)
+                light_x, light_y = self.find_facing_light(car)
                 boulder_x, boulder_y = (car.x + light_x) // 2, (car.y + light_y) // 2  # Place boulder halfway between car and light
             else:
                 while True:
@@ -914,7 +952,37 @@ class Gridworld:
             boulder_color = next(boulder_colors_iter)
             boulder = Obstacle(boulder_x, boulder_y, boulder_color)
             self.add_entity(boulder)
+            
+    def find_facing_light(self, car):
+        car_x, car_y = car.x, car.y
+        car_orientation = car.orientation
+        lights = [entity for entity in self.entities if isinstance(entity, TrafficLight)]
 
+        closest_light = None
+        min_distance = float('inf')
+
+        # Iterate through each light to find the one directly ahead of the car
+        for light in lights:
+            # For a light to be considered, it must be directly ahead based on the car's orientation
+            if car_orientation == 'up' and light.x == car_x and light.y < car_y:
+                distance = car_y - light.y
+            elif car_orientation == 'down' and light.x == car_x and light.y > car_y:
+                distance = light.y - car_y
+            elif car_orientation == 'left' and light.y == car_y and light.x < car_x:
+                distance = car_x - light.x
+            elif car_orientation == 'right' and light.y == car_y and light.x > car_x:
+                distance = light.x - car_x
+            else:
+                continue
+
+            if distance < min_distance:
+                closest_light = light
+                min_distance = distance
+
+        if closest_light:
+            return closest_light.x, closest_light.y
+
+        return None
 
     def get_causals(self, are_light_positions_fixed=True):
         """
@@ -943,8 +1011,8 @@ class Gridworld:
                     if not are_light_positions_fixed:
                         causal_dict[f'{base_key}_orientation'] = entity.orientation
                 else:
-                    # pass
-                    causal_dict[f'{base_key}_orientation'] = entity.orientation
+                    pass
+                    # causal_dict[f'{base_key}_orientation'] = entity.orientation
             # causal_dict[f'{base_key}_color'] = entity.color
             if isinstance(entity, TrafficLight):
                 causal_dict[f'{base_key}_state'] = entity.state

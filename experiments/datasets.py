@@ -1029,7 +1029,7 @@ class GridworldDataset(Dataset):
         if self.pass_gt_causals:
             num_latents = self.imgs.shape[-1]
             self.imgs = self.latent_state
-            self.imgs = np.concatenate([self.imgs, torch.zeros(self.imgs.shape[0], num_latents - self.imgs.shape[1]) - 1.0], axis=1)
+            self.imgs = np.concatenate([self.imgs, torch.zeros(self.imgs.shape[0], num_latents - self.imgs.shape[1]) - 0.0], axis=1)
             self.imgs = torch.from_numpy(self.imgs).float()
             if self.transform_gt:
                 self.encode_dataset(post_process_fn)
