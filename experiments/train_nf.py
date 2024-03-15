@@ -37,7 +37,8 @@ def encode_dataset(model, datasets):
             encodings = dataset.encode_dataset(lambda batch: model.autoencoder.encoder(batch.to(model.device)).cpu())
             torch.save(encodings, encoding_filename)
         else:
-            dataset.load_encodings(encoding_filename, lambda batch: model.frozen_flow(batch.to(model.device))[0].cpu())
+            # dataset.load_encodings(encoding_filename, lambda batch: model.frozen_flow(batch.to(model.device))[0].cpu())
+            dataset.load_encodings(encoding_filename, lambda batch: batch)
 
 
 if __name__ == '__main__':

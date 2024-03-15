@@ -589,6 +589,15 @@ class CorrelationMetricsLogCallback(pl.Callback):
                      tvalues[:, 5:7].mean(dim=-1, keepdims=True),
                      tvalues[:, 7:8],
                      tvalues[:, 8:10].mean(dim=-1, keepdims=True)], dim=-1).abs()
+            elif values.shape[1] == 8:
+                tvalues = torch.from_numpy(values)
+                tvalues = torch.cat(
+                    [tvalues[:, :2].mean(dim=-1, keepdims=True),
+                     tvalues[:, 2:4].mean(dim=-1, keepdims=True),
+                     tvalues[:, 4:6],
+                     tvalues[:, 6:7],
+                     tvalues[:, 7:8],], dim=-1).abs()
+                print(tvalues)
 
             # elif values.shape[1] == 5:
             #     tvalues = torch.from_numpy(values).abs()
@@ -659,6 +668,12 @@ class PermutationCorrelationMetricsLogCallback(CorrelationMetricsLogCallback):
             if ta.shape[1] == 5:
                 ta = torch.cat([ta[:,:2].sum(dim=-1, keepdims=True),
                                 ta[:,2:]], dim=-1)
+            elif ta.shape[1] == 8:
+                ta = torch.cat([ta[:,:2].sum(dim=-1, keepdims=True),
+                                ta[:,2:4].sum(dim=-1, keepdims=True),
+                                ta[:,4:6],
+                                ta[:,6:7],
+                                ta[:,7:8]], dim=-1)
             elif ta.shape[1] == 10:
                 ta = torch.cat([ta[:,:2].sum(dim=-1, keepdims=True),
                                 ta[:, 2:4],

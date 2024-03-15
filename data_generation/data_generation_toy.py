@@ -11,7 +11,7 @@ from tqdm import tqdm
 import argparse
 
 
-def save_metadata(dataset_name, split, gridworld, simplified=False):
+def save_metadata(dataset_name, split, gridworld, simplified=True):
     object_names = ['_'.join(a.split('_')[:-1]) for a in sorted(gridworld.get_causals())]
     # action_types = ['turn_left', 'turn_right', 'turn_up', 'turn_down', 'change_state', 'move_to_left', 'move_to_right', 'move_to_up', 'move_to_down']
     action_types = ['turn', 'change_state', 'move']
@@ -102,13 +102,13 @@ def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, 
         # Append action and intervention information
         actions.append(action)
         # Simplified, so the car position x is unidentifiable, so we remove it
-        # intervention = {key: value for key, value in intervention.items() if key != 'vehicle_(255, 0, 0)_position_x'}
+        intervention = {key: value for key, value in intervention.items() if key != 'vehicle_(255, 0, 0)_position_x'}
         interventions.append([intervention[key] for key in sorted(intervention.keys())])
 
         # Append causal information
         # Simplified, so the car position x is unidentifiable, so we remove it
         causal_vector = gridworld.get_causal_vector(are_light_positions_fixed=True)
-        # causal_vector = causal_vector[:4] + causal_vector[5:]
+        causal_vector = causal_vector[[0, 1, 2, 3, 4, 5, 7, 9]]
         
         causals.append(causal_vector)
         

@@ -1037,6 +1037,8 @@ class GridworldDataset(Dataset):
                 # apply min-max scaling to the orientations (they are in 0-3π/2 range, we want to scale them to 0-1)
                 orientation_indices = [i for i, key in enumerate(self.flattened_causals) if 'orientation' in key]
                 self.imgs[:, orientation_indices] = (self.imgs[:, orientation_indices] - 0.) / (3*np.pi/2 - 0.)
+                # Normalize every latent dim to -1, 1
+                self.imgs = self.imgs * 2 - 1
         self.encodings_active = True
 
     def _prepare_imgs(self, imgs):

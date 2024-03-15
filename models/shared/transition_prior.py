@@ -313,30 +313,55 @@ class InteractionTransitionPrior(nn.Module):
         if self.add_prev_state:
             if prev_state is None:
                 if self.last_batch_prev_state is None:
-                    prev_state = action.new_zeros(*action.shape[:-1], self.num_latents)
+                    # Default initialization of prev_state if not provided
+                    prev_state_default = action.new_zeros(*action.shape[:-1], self.num_latents)
                 else:
-                    prev_state = self.last_batch_prev_state[0:1]
-                    for _ in range(action.ndim - prev_state.ndim):
-                        prev_state = prev_state.unsqueeze(0)
-                    prev_state = prev_state.expand(*action.shape[:-1], self.num_latents)
-            action = torch.cat([action, prev_state], dim=-1)
+                    prev_state_default = self.last_batch_prev_state[0:1]
+                    for _ in range(action.ndim - prev_state_default.ndim):
+                        prev_state_default = prev_state_default.unsqueeze(0)
+                    prev_state_default = prev_state_default.expand(*action.shape[:-1], self.num_latents)
+            else:
+                # Ensure prev_state is not modified here but later in the respective branches
+                prev_state_default = prev_state
         
         if self.text:
             with torch.no_grad():
                 text_embeddings = self.text_encoder(tokenized_description, tokenized=tokenized)
             text_embeddings = self.text_MLP(text_embeddings)
-            encoded_action = self.encoding_layer(action[...,None,:].expand(-1, self.num_latents, -1))
-            if not tokenized:
-                text_embeddings = text_embeddings.repeat(encoded_action.shape[0], 1)
-            text_embeddings = text_embeddings[...,None,:].expand(-1, self.num_latents, -1)
-            if not self.text_only:
-                action = torch.cat([encoded_action, text_embeddings], dim=-1)
-            else:
-                action = text_embeddings
+
+            if self.text_only:
+                action = text_embeddings  # In this path, action is replaced with text_embeddings
+                
+                # Adjust prev_state for the text_only scenario
+                if self.add_prev_state and prev_state is None:
+                    prev_state = prev_state_default
                 if prev_state is not None:
+                    # Adjust dimensions of prev_state to match text_embeddings if necessary
+                    if prev_state.ndim < action.ndim:
+                        prev_state = prev_state.unsqueeze(1)  # Add dimension for sequence length
+                    # prev_state = prev_state.expand(-1, action.size(1), -1)
                     action = torch.cat([action, prev_state], dim=-1)
-            action = self.action_preprocess(action).squeeze(dim=-1)
+            else:
+                # For non-text_only scenario, encode action and then concatenate with text_embeddings
+                encoded_action = self.encoding_layer(action[...,None,:].expand(-1, self.num_latents, -1))
+                if not tokenized:
+                    text_embeddings = text_embeddings.repeat(encoded_action.shape[0], 1)
+                text_embeddings = text_embeddings[...,None,:].expand(-1, self.num_latents, -1)
+                action = torch.cat([encoded_action, text_embeddings], dim=-1)
+                
+                # Concatenate prev_state with action if required and not in text_only mode
+                if self.add_prev_state:
+                    if prev_state is None:
+                        prev_state = prev_state_default
+                    action = torch.cat([action, prev_state], dim=-1)
+
+            action = self.action_preprocess(action[...,None,:].expand(-1, self.num_latents, -1)).squeeze(dim=-1)
         else:
+            # For scenarios without text, simply process action
+            if self.add_prev_state and prev_state is None:
+                prev_state = prev_state_default
+            if self.add_prev_state:
+                action = torch.cat([action, prev_state], dim=-1)
             action = self.action_preprocess(action[...,None,:].expand(-1, self.num_latents, -1)).squeeze(dim=-1)
         if soft:
             action_idx = torch.tanh(action)
