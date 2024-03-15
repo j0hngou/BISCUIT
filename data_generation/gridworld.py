@@ -606,7 +606,7 @@ class Gridworld:
             return "The action did not match any entity."
 
     def semi_random_intervention(self, intervention_probabilities = {
-            'Vehicle': 0.2, 'TrafficLight': 0.4, 'Obstacle': 0.3, 'None': 0.1
+            'Vehicle': 0.3, 'TrafficLight': 0.3, 'Obstacle': 0.3, 'None': 0.1
         }):
         """
         Performs a semi-random intervention on a randomly chosen entity in the gridworld.
@@ -639,6 +639,7 @@ class Gridworld:
             next_pos = entity.predict_next_position()
             if not self.is_cell_free(*next_pos):
                 obstacle = self.get_entity_at_position(*next_pos)
+                vehicle = self.get_entity_at_position(*next_pos)
                 if obstacle and isinstance(obstacle, Obstacle):
                     # Move the obstacle
                     possible_moves = self.get_free_cells_around_entity(obstacle)
@@ -652,28 +653,54 @@ class Gridworld:
                         # binary_interventions[f'obstacle_{obstacle.color}_position'] = 1
                         binary_interventions[f'obstacle_{obstacle.color}_position_x'] = x_changed
                         binary_interventions[f'obstacle_{obstacle.color}_position_y'] = y_changed
-                else:
+                elif vehicle and isinstance(vehicle, Vehicle):
+                    dx, dy = 0, 0
+                    if entity.orientation == 'up':
+                        dy = -1
+                    elif entity.orientation == 'down':
+                        dy = 1
+                    elif entity.orientation == 'left':
+                        dx = -1
+                    elif entity.orientation == 'right':
+                        dx = 1
+                    next_pos = entity.x + dx, entity.y + dy
                     if random.random() < 0.3:
-                        # Turn the car
+                        # Move the car one step forward
+                        # Ensure no obstacles are blocking the vehicle and the traffic light across the car is not green
+                        corresponding_light = self.find_facing_light(entity)
+                        corresponding_light = self.get_entity_at_position(*corresponding_light)
+                        if self.is_cell_free(*next_pos) and corresponding_light.state != 'green':
+                            print("Intervening on vehicle's position")
+                            self.move_entity(entity, *next_pos)
+                            x_or_y = 'x' if entity.orientation in ['left', 'right'] else 'y'
+                            binary_interventions[f'vehicle_{entity.color}_position_{x_or_y}'] = 1
+                            action_code = (entity.x, entity.y, ACTION_MAPPING[f'move_to_{entity.orientation}'])
+                        else:
+                            # Do nothing
+                            pass
                         pass
-                        # current_orientation = entity.orientation
-                        # new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
-                        # new_orientation = random.choice(new_orientation_choices)
-                        # self.intervene(entity, 'turn', new_orientation=new_orientation)
-                        # binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
-                        # action_code = (entity.x, entity.y, ACTION_MAPPING[f'turn_{new_orientation}'])
                     else:
                         # Do nothing
                         pass
             else:
-                # Turn the car
-                # current_orientation = entity.orientation
-                # new_orientation_choices = {'up': ['left', 'right'], 'down': ['left', 'right'], 'left': ['up', 'down'], 'right': ['up', 'down']}[current_orientation]
-                # new_orientation = random.choice(new_orientation_choices)
-                # self.intervene(entity, 'turn', new_orientation=new_orientation)
-                # binary_interventions[f'vehicle_{entity.color}_orientation'] = 1
-                # action_code = (entity.x, entity.y, ACTION_MAPPING[f'turn_{new_orientation}'])
-                pass
+
+
+                # Move the car one step forward
+                # Ensure no obstacles are blocking the vehicle and the traffic light across the car is not green
+                corresponding_light = self.find_facing_light(entity)
+                corresponding_light = self.get_entity_at_position(*corresponding_light)
+                print(self.is_cell_free(*next_pos))
+                print(corresponding_light.state)
+                if self.is_cell_free(*next_pos) and corresponding_light.state != 'green':
+                    print("Intervening on vehicle's position")
+                    self.move_vehicle(entity)
+                    x_or_y = 'x' if entity.orientation in ['left', 'right'] else 'y'
+                    binary_interventions[f'vehicle_{entity.color}_position_{x_or_y}'] = 1
+                    action_code = (entity.x, entity.y, ACTION_MAPPING[f'move_to_{entity.orientation}'])
+                else:
+                    # Do nothing
+                    pass
+                    
         if isinstance(entity, TrafficLight):
             # Change the state of the traffic light
             self.intervene(entity, 'change_state')

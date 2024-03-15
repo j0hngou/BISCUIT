@@ -18,7 +18,7 @@ def save_metadata(dataset_name, split, gridworld, simplified=True):
     causal_vector = gridworld.get_causal_vector(are_light_positions_fixed=True)
     flattened_causals = sorted(gridworld.get_flattened_causals().keys())
     if simplified:
-        flattened_causals = [a for a in flattened_causals if ('vehicle' not in a and 'position_x' not in a)]
+        flattened_causals = [a for a in flattened_causals if not ('vehicle' in a and 'position_x' in a)]
     causal_keys = list(gridworld.get_causals().keys())
     are_interventions_stochastic = True
     metadata = {
@@ -41,7 +41,7 @@ def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, 
 
     random.seed(seed)
     np.random.seed(seed)
-    
+    print(seed)
     car_colors = [
         (255, 0, 0), # Red
         (0, 0, 255), # Blue
@@ -83,6 +83,8 @@ def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, 
     gridworld.step()  # Initial step to set up the environment
     initial_frame = gridworld.render()
     initial_causal_vector = gridworld.get_causal_vector(are_light_positions_fixed=True)
+    indices = [0, 1, 2, 3, 4, 5, 7, 9]
+    initial_causal_vector = [initial_causal_vector[i] for i in indices if i < len(initial_causal_vector)]     
     # initial_causal_vector = initial_causal_vector[:4] + initial_causal_vector[5:]
 
     frames = [initial_frame.copy()]  # List of frames, starting with the initial frame
@@ -102,14 +104,14 @@ def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, 
         # Append action and intervention information
         actions.append(action)
         # Simplified, so the car position x is unidentifiable, so we remove it
-        intervention = {key: value for key, value in intervention.items() if key != 'vehicle_(255, 0, 0)_position_x'}
+        # intervention = {key: value for key, value in intervention.items() if key != 'vehicle_(255, 0, 0)_position_x'}
         interventions.append([intervention[key] for key in sorted(intervention.keys())])
 
         # Append causal information
         # Simplified, so the car position x is unidentifiable, so we remove it
         causal_vector = gridworld.get_causal_vector(are_light_positions_fixed=True)
-        causal_vector = causal_vector[[0, 1, 2, 3, 4, 5, 7, 9]]
-        
+        indices = [0, 1, 2, 3, 4, 5, 7, 9]
+        causal_vector = [causal_vector[i] for i in indices if i < len(causal_vector)]        
         causals.append(causal_vector)
         
         # Append action description
@@ -192,14 +194,14 @@ if __name__ == '__main__':
 
     seeds = range(train_seeds)
 
-    gen_data(seeds, batch_size, 'train', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
+    # gen_data(seeds, batch_size, 'train', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
 
-    seeds = range(train_seeds, train_seeds + val_seeds)
-    print(f'Generating {seeds} seeds for the validation split')
-    gen_data(seeds, batch_size, 'val', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
+    # seeds = range(train_seeds, train_seeds + val_seeds)
+    # print(f'Generating {seeds} seeds for the validation split')
+    # gen_data(seeds, batch_size, 'val', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
 
-    seeds = range(train_seeds + val_seeds, train_seeds + val_seeds + test_seeds)
-    print(f'Generating {seeds} seeds for the test split')
-    gen_data(seeds, batch_size, 'test', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
-    # for i in range(15, 25):
-    #     run_simulation(10002, 'val', dataset_name, grid_x, grid_y, sprite_size, fixed_light_positions, save_metadata_flag=True, pre_intervention_step=args.pre_intervention_step)
+    # seeds = range(train_seeds + val_seeds, train_seeds + val_seeds + test_seeds)
+    # print(f'Generating {seeds} seeds for the test split')
+    # gen_data(seeds, batch_size, 'test', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
+    for i in range(25, 35):
+        run_simulation(i, 'check', dataset_name, grid_x, grid_y, sprite_size, fixed_light_positions, save_metadata_flag=True, pre_intervention_step=args.pre_intervention_step)
