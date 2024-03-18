@@ -95,9 +95,9 @@ def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, 
 
     # Generation loop
     for _ in range(1, 20):  # Start from 1 since we already have the initial state
+        pre_step_causals = gridworld.get_causals()
         if pre_intervention_step:
             gridworld.step()
-        pre_step_causals = gridworld.get_causals()
         action, intervention = gridworld.semi_random_intervention()
         if not pre_intervention_step:
             intervention = gridworld.step(intervention, pre_step_causals)
@@ -203,5 +203,5 @@ if __name__ == '__main__':
     # seeds = range(train_seeds + val_seeds, train_seeds + val_seeds + test_seeds)
     # print(f'Generating {seeds} seeds for the test split')
     # gen_data(seeds, batch_size, 'test', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
-    for i in range(25, 35):
+    for i in range(26, 35):
         run_simulation(i, 'check', dataset_name, grid_x, grid_y, sprite_size, fixed_light_positions, save_metadata_flag=True, pre_intervention_step=args.pre_intervention_step)

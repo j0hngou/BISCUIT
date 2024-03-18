@@ -637,9 +637,10 @@ class Gridworld:
         
         if isinstance(entity, Vehicle):
             next_pos = entity.predict_next_position()
+            # Check if there is an obstacle in front of the vehicle
             if not self.is_cell_free(*next_pos):
                 obstacle = self.get_entity_at_position(*next_pos)
-                vehicle = self.get_entity_at_position(*next_pos)
+                # vehicle = self.get_entity_at_position(*next_pos)
                 if obstacle and isinstance(obstacle, Obstacle):
                     # Move the obstacle
                     possible_moves = self.get_free_cells_around_entity(obstacle)
@@ -653,53 +654,48 @@ class Gridworld:
                         # binary_interventions[f'obstacle_{obstacle.color}_position'] = 1
                         binary_interventions[f'obstacle_{obstacle.color}_position_x'] = x_changed
                         binary_interventions[f'obstacle_{obstacle.color}_position_y'] = y_changed
-                elif vehicle and isinstance(vehicle, Vehicle):
-                    dx, dy = 0, 0
-                    if entity.orientation == 'up':
-                        dy = -1
-                    elif entity.orientation == 'down':
-                        dy = 1
-                    elif entity.orientation == 'left':
-                        dx = -1
-                    elif entity.orientation == 'right':
-                        dx = 1
-                    next_pos = entity.x + dx, entity.y + dy
-                    if random.random() < 0.3:
-                        # Move the car one step forward
-                        # Ensure no obstacles are blocking the vehicle and the traffic light across the car is not green
-                        corresponding_light = self.find_facing_light(entity)
-                        corresponding_light = self.get_entity_at_position(*corresponding_light)
-                        if self.is_cell_free(*next_pos) and corresponding_light.state != 'green':
-                            print("Intervening on vehicle's position")
-                            self.move_entity(entity, *next_pos)
-                            x_or_y = 'x' if entity.orientation in ['left', 'right'] else 'y'
-                            binary_interventions[f'vehicle_{entity.color}_position_{x_or_y}'] = 1
-                            action_code = (entity.x, entity.y, ACTION_MAPPING[f'move_to_{entity.orientation}'])
-                        else:
-                            # Do nothing
-                            pass
-                        pass
-                    else:
-                        # Do nothing
-                        pass
-            else:
-
-
-                # Move the car one step forward
-                # Ensure no obstacles are blocking the vehicle and the traffic light across the car is not green
-                corresponding_light = self.find_facing_light(entity)
-                corresponding_light = self.get_entity_at_position(*corresponding_light)
-                print(self.is_cell_free(*next_pos))
-                print(corresponding_light.state)
-                if self.is_cell_free(*next_pos) and corresponding_light.state != 'green':
-                    print("Intervening on vehicle's position")
-                    self.move_vehicle(entity)
-                    x_or_y = 'x' if entity.orientation in ['left', 'right'] else 'y'
-                    binary_interventions[f'vehicle_{entity.color}_position_{x_or_y}'] = 1
-                    action_code = (entity.x, entity.y, ACTION_MAPPING[f'move_to_{entity.orientation}'])
+            if next_pos == (entity.x, entity.y):
+                # We're either in front of a traffic light, or facing one with a red state
+                dx, dy = 0, 0
+                if entity.orientation == 'up':
+                    dy = -1
+                elif entity.orientation == 'down':
+                    dy = 1
+                elif entity.orientation == 'left':
+                    dx = -1
+                elif entity.orientation == 'right':
+                    dx = 1
+                next_pos = entity.x + dx, entity.y + dy
+                if random.random() < 0.7:
+                    # Move the car one step forward
+                    # Ensure no obstacles are blocking the vehicle and the traffic light across the car is not green
+                    old_x, old_y = entity.x, entity.y
+                    corresponding_light = self.find_facing_light(entity)
+                    corresponding_light = self.get_entity_at_position(*corresponding_light)
+                    if self.is_cell_free(*next_pos) and corresponding_light.state != 'green':
+                        print("Intervening on vehicle's position")
+                        self.move_entity(entity, *next_pos)
+                        x_or_y = 'x' if entity.orientation in ['left', 'right'] else 'y'
+                        binary_interventions[f'vehicle_{entity.color}_position_{x_or_y}'] = 1
+                        action_code = (old_x, old_y, ACTION_MAPPING[f'move_to_{entity.orientation}'])
                 else:
-                    # Do nothing
                     pass
+            # else:
+            #     # Move the car one step forward
+            #     # Ensure no obstacles are blocking the vehicle and the traffic light across the car is not green
+            #     corresponding_light = self.find_facing_light(entity)
+            #     corresponding_light = self.get_entity_at_position(*corresponding_light)
+            #     print(self.is_cell_free(*next_pos))
+            #     print(corresponding_light.state)
+            #     if self.is_cell_free(*next_pos) and corresponding_light.state != 'green':
+            #         print("Intervening on vehicle's position")
+            #         self.move_vehicle(entity)
+            #         x_or_y = 'x' if entity.orientation in ['left', 'right'] else 'y'
+            #         binary_interventions[f'vehicle_{entity.color}_position_{x_or_y}'] = 1
+            #         action_code = (entity.x, entity.y, ACTION_MAPPING[f'move_to_{entity.orientation}'])
+            #     else:
+            #         # Do nothing
+            #         pass
                     
         if isinstance(entity, TrafficLight):
             # Change the state of the traffic light
