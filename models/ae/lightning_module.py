@@ -128,8 +128,10 @@ class Autoencoder(pl.LightningModule):
         loss_rec = torch.mean(weights * (x_rec - imgs) ** 2)
         # loss_rec = F.mse_loss(x_rec, imgs)
         loss_reg = (z ** 2).mean()
+        loss_cov_reg = self.covariance_regularizer(z)
         self.log(f'{mode}_loss_rec', loss_rec)
         self.log(f'{mode}_loss_reg', loss_reg)
+        self.log(f'{mode}_loss_cov_reg', loss_cov_reg)
         self.log(f'{mode}_loss_reg_weighted', loss_reg * self.hparams.regularizer_weight)
         with torch.no_grad():
             self.log(f'{mode}_loss_rec_mse', F.mse_loss(x_rec, imgs))
@@ -140,7 +142,7 @@ class Autoencoder(pl.LightningModule):
             self.log(f'{mode}_loss_rec_smaller_01', (noncompressed_rec < 0.1).float().mean())
             self.log(f'{mode}_loss_rec_smaller_001', (noncompressed_rec < 0.01).float().mean())
             self.log(f'{mode}_loss_rec_smaller_0001', (noncompressed_rec < 0.001).float().mean())
-        loss = loss_rec + loss_reg * self.hparams.regularizer_weight
+        loss = loss_rec + loss_reg * self.hparams.regularizer_weight + loss_cov_reg * self.hparams.cov_reg_weight
 
         if self.action_mi_estimator is not None and mode == 'train':
             # Mutual information regularization
@@ -189,6 +191,27 @@ class Autoencoder(pl.LightningModule):
         # Create learning rate callback
         lr_callback = LearningRateMonitor('step')
         return [lr_callback, img_callback]
+    
+    def covariance_regularizer(self, z):
+        """
+        Computes the covariance regularization term for the latent variables.
+        
+        Parameters:
+        - z: Latent variables (batch_size x num_latents)
+        
+        Returns:
+        - cov_reg: The covariance regularization term
+        """
+        z_centered = z - z.mean(dim=0)
+        
+        cov_matrix = (z_centered.T @ z_centered) / (z_centered.size(0) - 1)
+        
+        identity = torch.eye(z.shape[1], device=z.device)
+        cov_diff = cov_matrix - identity
+        
+        cov_reg = (cov_diff ** 2).sum()
+
+        return cov_reg
 
 
 class AELogCallback(pl.Callback):
