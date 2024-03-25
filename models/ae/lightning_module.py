@@ -28,6 +28,7 @@ class Autoencoder(pl.LightningModule):
                        regularizer_weight=1e-4,
                        action_size=-1,
                        mi_reg_weight=0.0,
+                       latent_mi_reg_weight=0.0,
                        **kwargs):
         """
         Parameters
@@ -90,6 +91,19 @@ class Autoencoder(pl.LightningModule):
         else:
             self.action_mi_estimator = None
             self.action_mi_estimator_copy = None
+        
+        if self.hparams.latent_mi_reg_weight > 0:
+            self.latent_nce_loss = nn.BCEWithLogitsLoss()
+            self.latent_nce_classifier = nn.Sequential(
+                nn.Linear(self.hparams.num_latents * 2, self.hparams.c_hid),
+                nn.SiLU(),
+                nn.Dropout(0.3),
+                nn.Linear(self.hparams.c_hid, self.hparams.c_hid),
+                nn.SiLU(),
+                nn.Dropout(0.3),
+                nn.Linear(self.hparams.c_hid, 1)
+            )
+
 
     def forward(self, x, actions=None, return_z=False):
         z = self.encoder(x)
@@ -118,13 +132,10 @@ class Autoencoder(pl.LightningModule):
             imgs, actions = batch, None
         x_rec, z = self.forward(imgs, actions=actions, return_z=True)
         # Check if all channels are close to 0 (black pixels)
-        # Adjust the tolerance level if needed
         is_black = torch.all(imgs <= 1e-6, dim=1, keepdim=True)
 
-        # Create a weight matrix based on the condition
         weights = torch.where(is_black, weighted_loss[0] * torch.ones_like(imgs), weighted_loss[1] * torch.ones_like(imgs))
 
-        # Calculate the weighted MSE loss
         loss_rec = torch.mean(weights * (x_rec - imgs) ** 2)
         # loss_rec = F.mse_loss(x_rec, imgs)
         loss_reg = (z ** 2).mean()
@@ -133,6 +144,7 @@ class Autoencoder(pl.LightningModule):
         self.log(f'{mode}_loss_reg', loss_reg)
         self.log(f'{mode}_loss_cov_reg', loss_cov_reg)
         self.log(f'{mode}_loss_reg_weighted', loss_reg * self.hparams.regularizer_weight)
+        
         with torch.no_grad():
             self.log(f'{mode}_loss_rec_mse', F.mse_loss(x_rec, imgs))
             self.log(f'{mode}_loss_rec_abs', torch.abs(x_rec - imgs).mean())
@@ -151,6 +163,14 @@ class Autoencoder(pl.LightningModule):
             self.log(f'{mode}_loss_mi_reg_model', loss_mi_reg_model)
             self.log(f'{mode}_loss_mi_reg_latents', loss_mi_reg_latents)
             self.log(f'{mode}_loss_mi_reg_latents_weighted', loss_mi_reg_latents * self.hparams.mi_reg_weight)
+
+        if self.hparams.latent_mi_reg_weight > 0:
+            nce_loss = self._get_nce_loss(z)
+            self.log(f'{mode}_nce_loss', nce_loss)
+            self.log(f'{mode}_nce_loss_weighted', nce_loss * self.hparams.latent_mi_reg_weight)
+            loss += nce_loss * self.hparams.latent_mi_reg_weight
+        
+        
         return loss
 
     def _get_mi_reg_loss(self, z, actions):
@@ -171,6 +191,26 @@ class Autoencoder(pl.LightningModule):
         latents_loss = -F.log_softmax(latents_out, dim=1).mean()
 
         return model_loss, latents_loss
+
+    def _get_nce_loss(self, z):
+        batch_size, latent_dim = z.size()
+        
+        real_pairs = torch.cat([z, z.detach()], dim=1)
+        
+        # shuffle z and concatenate
+        shuffled_idxs = torch.randperm(batch_size)
+        noise_pairs = torch.cat([z, z[shuffled_idxs].detach()], dim=1)
+        
+        labels_real = torch.ones(batch_size, 1, device=z.device)
+        labels_noise = torch.zeros(batch_size, 1, device=z.device)
+        
+        preds_real = self.latent_nce_classifier(real_pairs)
+        preds_noise = self.latent_nce_classifier(noise_pairs)
+        
+        loss_real = self.latent_nce_loss(preds_real, labels_real)
+        loss_noise = self.latent_nce_loss(preds_noise, labels_noise)
+        nce_loss = (loss_real + loss_noise) / 2
+        return nce_loss
 
     def training_step(self, batch, batch_idx):
         loss = self._get_loss(batch, mode='train')
@@ -212,6 +252,7 @@ class Autoencoder(pl.LightningModule):
         cov_reg = (cov_diff ** 2).sum()
 
         return cov_reg
+    
 
 
 class AELogCallback(pl.Callback):
