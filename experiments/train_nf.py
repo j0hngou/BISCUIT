@@ -53,7 +53,7 @@ if __name__ == '__main__':
     parser.add_argument('--act_fn', type=str, default='silu')
     parser.add_argument('--num_latents', type=int, default=40)
     parser.add_argument('--prior_action_add_prev_state', action="store_true")
-    parser.add_argument('--try_encodings', type=bool, default=True)
+    parser.add_argument('--try_encodings', type=bool, default=False)
     parser.add_argument('--logit_reg_factor', type=float, default=0.004)
     parser.add_argument('--text', default=False, action="store_true")
     parser.add_argument('--lr_text', type=float, default=1e-4, help='Learning rate for text model')

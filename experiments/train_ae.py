@@ -36,7 +36,8 @@ if __name__ == '__main__':
     parser.add_argument('--use_coordconv', action='store_true')
     parser.add_argument('--cov_reg_weight', type=float, default=0.0)
     parser.add_argument('--latent_mi_reg_weight', type=float, default=0.0)
-
+    parser.add_argument('--latents_pwhsic_reg_weight', type=float, default=0.0)
+    
     args = parser.parse_args()
     pl.seed_everything(args.seed)
 

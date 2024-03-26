@@ -2,7 +2,7 @@
 
 #SBATCH --job-name=trainAE
 #SBATCH -p gpu  # Partition to submit to
-#SBATCH -t 1-14:00         # Runtime in D-HH:MM, minimum of 10 minutes
+#SBATCH -t 1-12:00         # Runtime in D-HH:MM, minimum of 10 minutes
 #SBATCH -c 8              # Number of cores (-c)
 #SBATCH --gres=gpu:1                # Number of cores (-c)
 #SBATCH --mem=120000          # Memory pool for all cores (see also --mem-per-cpu)
@@ -19,17 +19,4 @@ eval "$(conda shell.bash hook)"
 conda activate biscuit
 
 #python train_nf.py --data_dir /scratch-shared/gkounto/ithor --num_latents 40
-python train_ae.py --data_dir /home/gkounto/BISCUIT/data_generation/data/gridworld_simplified_2c2b2l_noturn_noshufflecars_preintv \
-                   --batch_size 64 \
-                   --c_hid 64 \
-                   --lr 2e-4 \
-                   --warmup 100 \
-                   --num_latents 40\
-                   --cluster \
-                   --regularizer_weight 4e-6 \
-                   --cov_reg_weight 1e-6 \
-                   --max_epochs 300 \
-                   --seed 42 \
-                   --use_coordconv \
-                   --latent_mi_reg_weight 1e-3 \
-                   --latents_pwhsic_reg_weight 1e-2
+python train_frameonly_vae.py --data_dir /home/gkounto/BISCUIT/data_generation/data/gridworld_simplified_12c_3d/ --batch_size 64 --c_hid 64 --lr 2e-4 --warmup 1000 --num_latents 40 --cluster --max_epochs 300 --seed 42 --beta 1.0 --use_coordconv 
