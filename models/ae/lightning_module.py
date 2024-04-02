@@ -29,6 +29,7 @@ class Autoencoder(pl.LightningModule):
                        action_size=-1,
                        mi_reg_weight=0.0,
                        latent_mi_reg_weight=0.0,
+                       whole_episode_contrastive=False,
                        **kwargs):
         """
         Parameters
@@ -126,8 +127,16 @@ class Autoencoder(pl.LightningModule):
 
     def _get_loss(self, batch, mode='train', weighted_loss=(0.2, 0.8)):
         # Trained by standard MSE loss
-        if isinstance(batch, (tuple, list)) and len(batch) == 2:
-            imgs, actions = batch
+        if self.hparams.whole_episode_contrastive:
+            imgs, frame_positions, actions = batch, None
+            self.batch_nums, self.episode_len = imgs.shape[0], imgs.shape[1]
+            # Images are of shape (batch, episode_len, C, H, W) 
+            imgs = imgs.view(-1, *imgs.shape[2:])
+            # Adjust frame positions to match the image view
+            frame_positions = frame_positions.view(-1, *frame_positions.shape[2:])
+        elif:
+            isinstance(batch, (tuple, list)) and len(batch) == 2:
+                imgs, actions = batch
         else:
             imgs, actions = batch, None
         x_rec, z = self.forward(imgs, actions=actions, return_z=True)
@@ -273,6 +282,50 @@ class Autoencoder(pl.LightningModule):
         dists = torch.cdist(Z, Z, p=norm)
         sigma = torch.median(dists[dists.nonzero(as_tuple=True)].view(-1))
         return sigma
+
+    def _get_contrastive_loss(self, z, timesteps):
+        """
+        Computes the temporal contrastive loss for each episode in the batch
+        with random selection of anchor frame and comparing it with all other frames
+        in the same episode.
+
+        Parameters:
+        - z: Tensor representing the latent space encodings reshaped to the original batch size and episode length.
+        - timesteps: Tensor representing the relative timesteps within each episode.
+
+        Returns:
+        - The average contrastive loss across the batch of episodes.
+        """
+        batch_size, episode_len, _ = z.size()
+        losses = []
+
+        for i in range(batch_size):
+            # Randomly select anchor
+            anchor_idx = torch.randint(0, episode_len, (1,)).item()
+            anchor_z = z[i, anchor_idx].unsqueeze(0)
+
+            # Exclude the anchor frame and get all other frames as positives
+            positive_idxs = [idx for idx in range(episode_len) if idx != anchor_idx]
+            positive_zs = z[i, positive_idxs]
+
+            # Calculate pairwise cosine similarity between the anchor and all positives
+            similarities = F.cosine_similarity(anchor_z, positive_zs)
+            # Rescale the cosine similarities to range (0, 2)
+            # similarities = (similarities + 1) / 2.0
+
+            # Calculate the temporal weights based on the relative positions of the frames
+            anchor_time = timesteps[i, anchor_idx].unsqueeze(0)
+            positive_times = timesteps[i, positive_idxs]
+            temporal_distances = torch.abs(anchor_time - positive_times)
+            weights = F.softmax(-temporal_distances, dim=0)
+
+            # Calculate the contrastive loss
+            weighted_similarities = similarities * weights
+            loss = -torch.log(weighted_similarities.sum() / (episode_len - 1))
+            losses.append(loss)
+
+        # Return the mean loss across the batch
+        return torch.stack(losses).mean()
 
 class HSIC(nn.Module):
     """Base class for the finite sample estimator of Hilbert-Schmidt Independence Criterion (HSIC)
