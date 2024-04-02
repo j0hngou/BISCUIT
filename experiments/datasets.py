@@ -877,7 +877,9 @@ class GridworldDataset(Dataset):
                  return_targets=False, return_latents=False, triplet=False,
                  seq_len=2, cluster=False, try_encodings=False, categorical_actions=False,
                  return_text=False, subsample_percentage=1.0, subsample_chunk=0,
-                 debug_data=False, episode_length=20, **kwargs):
+                 debug_data=False, episode_length=20, return_whole_episode=False,
+                 return_triplet_with_external_negative=False, min_temporal_distance=5,
+                 return_up_to_current=False, **kwargs):
 
         super().__init__()
         self.cluster = cluster
@@ -900,8 +902,15 @@ class GridworldDataset(Dataset):
         print(len(self.data_files))
         self.pass_gt_causals = kwargs.get('pass_gt_causals', False)
         self.transform_gt = kwargs.get('transform_gt')
-        # self.indices = self.calculate_indices() #range(len(self.data_files) * (seq_len - 1))
+        self.return_whole_episode = return_whole_episode
+        self.return_triplet_with_external_negative = return_triplet_with_external_negative
+        self.min_temporal_distance = min_temporal_distance
+        self.return_up_to_current = return_up_to_current
+        # Ensure at most one of the three flags `return_whole_episode` `return_triplet_with_external_negative` `return_up_to_current` is active
+        if sum([return_whole_episode, return_triplet_with_external_negative, return_up_to_current]) > 1:
+            raise ValueError("Only one of `return_whole_episode`, `return_triplet_with_external_negative`, or `return_up_to_current` can be True at a time.")
 
+        # self.indices = self.calculate_indices() #range(len(self.data_files) * (seq_len - 1))
         
         # Load metadata
         self.load_metadata(data_folder, split)
@@ -1109,7 +1118,49 @@ class GridworldDataset(Dataset):
     #     return tuple(returns) if len(returns) > 1 else returns[0]
 
     def __getitem__(self, idx):
-        # Use the pre-calculated index to directly access the frames and associated data
+        # Use the pre-calculated index to directly access the frames and associated data        
+        if self.return_whole_episode:
+            episode_idx = idx // self.episode_length
+            start_frame_idx = episode_idx * self.episode_length
+            end_frame_idx = start_frame_idx + self.episode_length
+            episode_frames = self.imgs[start_frame_idx:end_frame_idx]
+            episode_frames = self._prepare_imgs(episode_frames)
+            # Generate frame positions within the episode
+            frame_positions = torch.arange(1, self.episode_length + 1)
+            return episode_frames, frame_positions
+
+        if self.return_up_to_current:
+            episode_idx = idx // self.episode_length
+            episode_start_idx = episode_idx * self.episode_length
+            current_frame_position = idx % self.episode_length + 1  # Current frame's position within the episode
+            up_to_current_frames = self.imgs[episode_start_idx:idx + 1]
+            up_to_current_frames = self._prepare_imgs(up_to_current_frames)
+            
+            frame_positions = torch.arange(1, current_frame_position + 1)
+            return up_to_current_frames, frame_positions
+
+        if self.return_triplet_with_external_negative:
+            # Anchor and positive are sequential in the same episode
+            episode_idx = idx // self.episode_length
+            start_frame_idx = episode_idx * self.episode_length
+            anchor_position = (idx - start_frame_idx) + 1  # Position within the episode
+            
+            anchor_idx = idx
+            positive_idx = idx + 1  # Sequential frame
+            
+            # Ensure the negative example is from a different episode
+            negative_episode_idx = np.random.choice([i for i in range(len(self.data_files)) if i != episode_idx])
+            negative_start_frame_idx = negative_episode_idx * self.episode_length
+            negative_idx = np.random.choice(range(negative_start_frame_idx, negative_start_frame_idx + self.episode_length))
+            negative_position = (negative_idx - negative_start_frame_idx) + 1  # Position within its episode
+            
+            # Fetch the frames
+            anchor_frame = self._prepare_imgs(self.imgs[anchor_idx:anchor_idx+1])
+            positive_frame = self._prepare_imgs(self.imgs[positive_idx:positive_idx+1])
+            negative_frame = self._prepare_imgs(self.imgs[negative_idx:negative_idx+1])
+            
+            return (anchor_frame, anchor_position), (positive_frame, anchor_position + 1), (negative_frame, negative_position)
+
         start_frame_idx = self.indices[idx]
         
         # Fetch frame or frame pair

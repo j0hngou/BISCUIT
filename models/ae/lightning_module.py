@@ -30,6 +30,8 @@ class Autoencoder(pl.LightningModule):
                        mi_reg_weight=0.0,
                        latent_mi_reg_weight=0.0,
                        whole_episode_contrastive=False,
+                       triplet_contrastive=False,
+                       reconstructive=True,
                        **kwargs):
         """
         Parameters
@@ -53,6 +55,7 @@ class Autoencoder(pl.LightningModule):
                       Standard deviation of the added noise to the latents.
         """
         super().__init__()
+        self.reconstructive = reconstructive
         self.save_hyperparameters()
 
         if self.hparams.img_width == 32:
@@ -112,11 +115,14 @@ class Autoencoder(pl.LightningModule):
         z_samp = z + torch.randn_like(z) * self.hparams.noise_level
         if actions is not None and self.hparams.action_size > 0:
             z_samp = torch.cat([z_samp, actions], dim=-1)
-        x_rec = self.decoder(z_samp)
-        if return_z:
-            return x_rec, z
+        if self.reconstructive:
+            x_rec = self.decoder(z_samp)
+            if return_z:
+                return x_rec, z
+            else:
+                return x_rec
         else:
-            return x_rec 
+            return z_samp
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=self.hparams.lr, weight_decay=0.0)
@@ -139,6 +145,8 @@ class Autoencoder(pl.LightningModule):
                 imgs, actions = batch
         else:
             imgs, actions = batch, None
+        
+        
         x_rec, z = self.forward(imgs, actions=actions, return_z=True)
         # Check if all channels are close to 0 (black pixels)
         is_black = torch.all(imgs <= 1e-6, dim=1, keepdim=True)
