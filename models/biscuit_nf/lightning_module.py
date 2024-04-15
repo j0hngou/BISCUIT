@@ -181,9 +181,10 @@ class BISCUITNF(BISCUITVAE):
         img_callback = ImageLogCallback([None, None], dataset, every_n_epochs=10, cluster=cluster)
         # Create learning rate callback
         lr_callback = LearningRateMonitor('step')
-        next_step_callback = NextStepCallback(dataset=next_step_dataset, every_n_epochs=1)
-        next_step_callback_train = NextStepCallback(dataset=dataset, every_n_epochs=1, split_name='train')
-        callbacks = [lr_callback, img_callback, next_step_callback, next_step_callback_train]
+        # next_step_callback = NextStepCallback(dataset=next_step_dataset, every_n_epochs=1)
+        # next_step_callback_train = NextStepCallback(dataset=dataset, every_n_epochs=1, split_name='train')
+        # callbacks = [lr_callback, img_callback, next_step_callback, next_step_callback_train]
+        callbacks = [lr_callback, img_callback]
         corr_callback = PermutationCorrelationMetricsLogCallback(correlation_dataset, 
                                                                  cluster=cluster, 
                                                                  test_dataset=correlation_test_dataset)

@@ -877,8 +877,7 @@ class GridworldDataset(Dataset):
                  return_targets=False, return_latents=False, triplet=False,
                  seq_len=2, cluster=False, try_encodings=False, categorical_actions=False,
                  return_text=False, subsample_percentage=1.0, subsample_chunk=0,
-                 debug_data=False, episode_length=20, return_whole_episode=False,
-                 return_triplet_with_external_negative=False, min_temporal_distance=5,
+                 debug_data=False, episode_length=20, return_whole_episode=False, min_temporal_distance=5,
                  return_up_to_current=False, **kwargs):
 
         super().__init__()
@@ -903,12 +902,13 @@ class GridworldDataset(Dataset):
         self.pass_gt_causals = kwargs.get('pass_gt_causals', False)
         self.transform_gt = kwargs.get('transform_gt')
         self.return_whole_episode = return_whole_episode
-        self.return_triplet_with_external_negative = return_triplet_with_external_negative
         self.min_temporal_distance = min_temporal_distance
         self.return_up_to_current = return_up_to_current
+        self.total_episodes = len(self.data_files)
+
         # Ensure at most one of the three flags `return_whole_episode` `return_triplet_with_external_negative` `return_up_to_current` is active
-        if sum([return_whole_episode, return_triplet_with_external_negative, return_up_to_current]) > 1:
-            raise ValueError("Only one of `return_whole_episode`, `return_triplet_with_external_negative`, or `return_up_to_current` can be True at a time.")
+        if sum([return_whole_episode, triplet, return_up_to_current]) > 1:
+            raise ValueError("Only one of `return_whole_episode`, `triplet`, or `return_up_to_current` can be True at a time.")
 
         # self.indices = self.calculate_indices() #range(len(self.data_files) * (seq_len - 1))
         
@@ -1062,8 +1062,12 @@ class GridworldDataset(Dataset):
                 imgs = imgs.permute(2, 0, 1)
             return imgs
 
-    def __len__(self):
         # return len(self.data_files) * (self.indices_per_file if self.single_image else self.seq_len - 1)
+    def __len__(self):
+        if self.return_whole_episode:
+            return self.total_episodes
+        else:
+            return len(self.indices)
         return len(self.indices)
     
     def action_size(self):
@@ -1120,12 +1124,10 @@ class GridworldDataset(Dataset):
     def __getitem__(self, idx):
         # Use the pre-calculated index to directly access the frames and associated data        
         if self.return_whole_episode:
-            episode_idx = idx // self.episode_length
-            start_frame_idx = episode_idx * self.episode_length
+            start_frame_idx = idx * self.episode_length
             end_frame_idx = start_frame_idx + self.episode_length
             episode_frames = self.imgs[start_frame_idx:end_frame_idx]
             episode_frames = self._prepare_imgs(episode_frames)
-            # Generate frame positions within the episode
             frame_positions = torch.arange(1, self.episode_length + 1)
             return episode_frames, frame_positions
 
@@ -1139,7 +1141,7 @@ class GridworldDataset(Dataset):
             frame_positions = torch.arange(1, current_frame_position + 1)
             return up_to_current_frames, frame_positions
 
-        if self.return_triplet_with_external_negative:
+        if self.triplet:
             # Anchor and positive are sequential in the same episode
             episode_idx = idx // self.episode_length
             start_frame_idx = episode_idx * self.episode_length
