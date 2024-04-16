@@ -148,8 +148,8 @@ if __name__ == '__main__':
     # path = '/home/gkounto/BISCUIT/data_generation/data/gridworld_simplified_2c2b2l_noturn_noshufflecars/'
     
     paths = [
-        '/home/gkounto/BISCUIT/data_generation/data/gridworld_simplified_2c2b2l_noturn_noshufflecars/',
-        '/home/gkounto/BISCUIT/data_generation/data/gridworld_simplified_2c2b2l_noturn_shufflecars/',
+        '/home/gkounto/BISCUIT/data_generation/data/gridworld_simplified_2c2b2l_noturn_noshufflecars_bfix_preintv/',
+        # '/home/gkounto/BISCUIT/data_generation/data/gridworld_simplified_2c2b2l_noturn_shufflecars/',
     ]
     for path in paths:
         for split in ['train']:#, 'val', 'test', 'test_indep', 'val_indep']:

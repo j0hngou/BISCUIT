@@ -7,6 +7,8 @@ from pytorch_lightning.callbacks import LearningRateMonitor
 from pytorch_lightning.loggers import WandbLogger
 import numpy as np
 from copy import deepcopy
+from models.shared.text_models import SentenceTransformer, TextMLP, SigLIP
+
 
 import sys
 sys.path.append('../../')
@@ -121,7 +123,13 @@ class Autoencoder(pl.LightningModule):
                 nn.Linear(self.hparams.c_hid, 1)
             )
         if use_infonce_loss:
-            self.context_network = nn.GRU(self.hparams.num_latents, self.hparams.c_hid_ctx, batch_first=True)
+            if self.hparams.id_ctx_network:
+                self.context_network = lambda x: (nn.Identity()(x),)
+            else:
+                if self.hparams.use_text_in_ctx:
+                    self.context_network = nn.GRU(self.hparams.num_latents + self.hparams.text_mlp_out_dim, self.hparams.c_hid_ctx, batch_first=True)
+                else:
+                    self.context_network = nn.GRU(self.hparams.num_latents, self.hparams.c_hid_ctx, batch_first=True)
             gru_c_hid = self.context_network.hidden_size
             if use_scoring_network:
                 self.scoring_network = nn.Sequential(
@@ -138,7 +146,21 @@ class Autoencoder(pl.LightningModule):
                     self.W_1 = nn.Linear(self.hparams.c_hid_ctx, self.hparams.num_latents)
                 else:
                     raise NotImplementedError('Only 1-step CPC is implemented')
-
+        if self.hparams.use_text_in_ctx:
+            valid_text_encoders = ['sentence_transformer', 'siglip']
+            if self.hparams.text_encoder == 'sentence_transformer':
+                self.text_encoder = SentenceTransformer()
+                text_proj_dim = self.text_encoder.model.config.hidden_size
+            elif self.hparams.text_encoder == 'siglip':
+                self.text_encoder = SigLIP()
+                text_proj_dim = self.text_encoder.model.text_projection.out_features
+            else:
+                raise ValueError(f'Unknown text encoder {text_encoder}. Valid options are {valid_text_encoders}')
+            text_mlp_out_dim = self.hparams.text_mlp_out_dim
+            self.text_MLP = TextMLP(text_proj_dim, text_mlp_out_dim,
+                                hidden_dim=c_hid,
+                                num_layers=2,
+                                non_linearity=nn.SiLU())
 
     def forward(self, x, actions=None, return_z=False, return_identical=False):
         z = self.encoder(x)
@@ -169,12 +191,23 @@ class Autoencoder(pl.LightningModule):
     def _get_loss(self, batch, mode='train', weighted_loss=(0.2, 0.8)):
         # Trained by standard MSE loss if reconstructive
         if self.hparams.whole_episode_contrastive:
-            (imgs, frame_positions), actions = batch, None
+            if self.hparams.use_text_in_ctx:
+                imgs, frame_positions, input_ids, token_type_ids, attention_mask = batch
+                imgs, frame_positions, input_ids, token_type_ids, attention_mask = imgs[:, :-1, ...], frame_positions[:, :-1, ...], input_ids[:, :-1, ...], token_type_ids[:, :-1, ...], attention_mask[:, :-1, ...]
+            else:
+                (imgs, frame_positions), actions = batch, None
             self.batch_nums, self.episode_len = imgs.shape[0], imgs.shape[1]
             # Images are of shape (batch, episode_len, C, H, W) 
-            imgs = imgs.view(-1, *imgs.shape[2:])
+            imgs = imgs.reshape(-1, *imgs.shape[2:])
             # Adjust frame positions to match the image view
-            frame_positions = frame_positions.view(-1, *frame_positions.shape[2:])
+            frame_positions = frame_positions.reshape(-1, *frame_positions.shape[2:])
+            # # Set each element of the last sequence of each batch to 0
+            # input_ids[torch.arange(self.batch_nums) * self.episode_len + (self.episode_len - 1)] = 0
+            # token_type_ids[torch.arange(self.batch_nums) * self.episode_len + (self.episode_len - 1)] = 0
+            # attention_mask[torch.arange(self.batch_nums) * self.episode_len + (self.episode_len - 1)] = 0
+            input_ids = input_ids.reshape(-1, *input_ids.shape[2:])
+            token_type_ids = token_type_ids.reshape(-1, *token_type_ids.shape[2:])
+            attention_mask = attention_mask.reshape(-1, *attention_mask.shape[2:])
         elif self.hparams.triplet_contrastive:
             # batch is [B, *A_img_shape], [B, *P_img_shape], [B, *N_img_shape]
             (anchor_frames, anchor_positions), (positive_frame, positive_position), (negative_frame, negative_position) = batch
@@ -210,7 +243,13 @@ class Autoencoder(pl.LightningModule):
         if self.hparams.whole_episode_contrastive:
             if self.hparams.use_infonce_loss:
                 z = z.view(self.batch_nums, self.episode_len, -1)
-                c = self.context_network(z)[0]
+                if self.hparams.use_text_in_ctx:
+                    with torch.no_grad():
+                        tokenized_description = {'input_ids': input_ids.to(z.device), 'token_type_ids': token_type_ids.to(z.device), 'attention_mask': attention_mask.to(z.device)}
+                        text_embeddings = self.text_encoder(tokenized_description, tokenized=True)
+                    text_embeddings = self.text_MLP(text_embeddings)
+                    text_embeddings = text_embeddings.view(self.batch_nums, self.episode_len, -1)
+                c = self.context_network(torch.cat([z, text_embeddings], dim=-1))[0]
                 loss_infonce = self._get_infonce_loss(z, c, self.hparams.num_negative_samples)
                 self.log(f'{mode}_loss_infonce', loss_infonce)
                 loss_contrastive = loss_infonce * self.hparams.infonce_loss_weight
@@ -802,7 +841,7 @@ class CombinedVisualizationCallback(Callback):
                     sample_count += len(anchor_frames) * 2
                 else:
                     # Handling whole episodes
-                    imgs, frame_positions = batch
+                    imgs, frame_positions, *_ = batch
                     imgs = imgs.view(-1, *imgs.shape[2:])
                     frame_positions = frame_positions.view(-1)
                     if sample_count + imgs.shape[0] > self.max_samples:

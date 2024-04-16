@@ -976,15 +976,15 @@ class GridworldDataset(Dataset):
             for key, val in data_seq.items():
                 # We must append a dummy action and intervention for the last frame
                 if key == 'actions':
-                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 100], axis=0)
+                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 0], axis=0)
                 if key == 'interventions':
-                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 100], axis=0)
+                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 0], axis=0)
                 if key == 'input_ids':
-                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 100], axis=0)
+                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 0], axis=0)
                 if key == 'token_type_ids':
-                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 100], axis=0)
+                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 0], axis=0)
                 if key == 'attention_mask':
-                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 100], axis=0)
+                    val = np.concatenate([val, np.zeros((1, val.shape[1]), dtype=val.dtype) - 0], axis=0)
                 if key not in data:
                     data[key] = [val]
                 else:
@@ -1129,7 +1129,10 @@ class GridworldDataset(Dataset):
             episode_frames = self.imgs[start_frame_idx:end_frame_idx]
             episode_frames = self._prepare_imgs(episode_frames)
             frame_positions = torch.arange(1, self.episode_length + 1)
-            return episode_frames, frame_positions
+            if self.return_text:
+                return episode_frames, frame_positions, self.input_ids[start_frame_idx:end_frame_idx], self.token_type_ids[start_frame_idx:end_frame_idx], self.attention_mask[start_frame_idx:end_frame_idx]
+            else:
+                return episode_frames, frame_positions
 
         if self.return_up_to_current:
             episode_idx = idx // self.episode_length

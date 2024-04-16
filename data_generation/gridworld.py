@@ -606,7 +606,7 @@ class Gridworld:
             return "The action did not match any entity."
 
     def semi_random_intervention(self, intervention_probabilities = {
-            'Vehicle': 0.3, 'TrafficLight': 0.3, 'Obstacle': 0.3, 'None': 0.1
+            'Vehicle': 0.25, 'TrafficLight': 0.25, 'Obstacle': 0.45, 'None': 0.05
         }):
         """
         Performs a semi-random intervention on a randomly chosen entity in the gridworld.
@@ -673,7 +673,7 @@ class Gridworld:
                     corresponding_light = self.find_facing_light(entity)
                     corresponding_light = self.get_entity_at_position(*corresponding_light)
                     if self.is_cell_free(*next_pos) and corresponding_light.state != 'green':
-                        print("Intervening on vehicle's position")
+                        # print("Intervening on vehicle's position")
                         self.move_entity(entity, *next_pos)
                         x_or_y = 'x' if entity.orientation in ['left', 'right'] else 'y'
                         binary_interventions[f'vehicle_{entity.color}_position_{x_or_y}'] = 1
@@ -966,6 +966,7 @@ class Gridworld:
                 # light_x, light_y = self.calculate_light_position(car.x, car.y, car.orientation, min_dist=y_percent, grid_size=grid_size)
                 light_x, light_y = self.find_facing_light(car)
                 boulder_x, boulder_y = (car.x + light_x) // 2, (car.y + light_y) // 2  # Place boulder halfway between car and light
+                occupied_positions.add((boulder_x, boulder_y))
             else:
                 while True:
                     boulder_x, boulder_y = np.random.randint(0, grid_size), np.random.randint(0, grid_size)
