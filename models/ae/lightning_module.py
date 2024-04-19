@@ -130,7 +130,7 @@ class Autoencoder(pl.LightningModule):
                     self.context_network = nn.GRU(self.hparams.num_latents + self.hparams.text_mlp_out_dim, self.hparams.c_hid_ctx, batch_first=True)
                 else:
                     self.context_network = nn.GRU(self.hparams.num_latents, self.hparams.c_hid_ctx, batch_first=True)
-            gru_c_hid = self.context_network.hidden_size
+            # gru_c_hid = self.context_network.hidden_size
             if use_scoring_network:
                 self.scoring_network = nn.Sequential(
                     nn.Linear(self.hparams.num_latents + self.hparams.c_hid_ctx, self.hparams.c_hid),
@@ -144,6 +144,8 @@ class Autoencoder(pl.LightningModule):
             else:
                 if self.hparams.num_cpc_steps == 1:
                     self.W_1 = nn.Linear(self.hparams.c_hid_ctx, self.hparams.num_latents)
+                    if self.hparams.id_ctx_network:
+                        self.W_1 = nn.Identity()
                 else:
                     raise NotImplementedError('Only 1-step CPC is implemented')
         if self.hparams.use_text_in_ctx:
@@ -205,9 +207,10 @@ class Autoencoder(pl.LightningModule):
             # input_ids[torch.arange(self.batch_nums) * self.episode_len + (self.episode_len - 1)] = 0
             # token_type_ids[torch.arange(self.batch_nums) * self.episode_len + (self.episode_len - 1)] = 0
             # attention_mask[torch.arange(self.batch_nums) * self.episode_len + (self.episode_len - 1)] = 0
-            input_ids = input_ids.reshape(-1, *input_ids.shape[2:])
-            token_type_ids = token_type_ids.reshape(-1, *token_type_ids.shape[2:])
-            attention_mask = attention_mask.reshape(-1, *attention_mask.shape[2:])
+            if self.hparams.use_text_in_ctx:
+                input_ids = input_ids.reshape(-1, *input_ids.shape[2:])
+                token_type_ids = token_type_ids.reshape(-1, *token_type_ids.shape[2:])
+                attention_mask = attention_mask.reshape(-1, *attention_mask.shape[2:])
         elif self.hparams.triplet_contrastive:
             # batch is [B, *A_img_shape], [B, *P_img_shape], [B, *N_img_shape]
             (anchor_frames, anchor_positions), (positive_frame, positive_position), (negative_frame, negative_position) = batch
@@ -249,7 +252,9 @@ class Autoencoder(pl.LightningModule):
                         text_embeddings = self.text_encoder(tokenized_description, tokenized=True)
                     text_embeddings = self.text_MLP(text_embeddings)
                     text_embeddings = text_embeddings.view(self.batch_nums, self.episode_len, -1)
-                c = self.context_network(torch.cat([z, text_embeddings], dim=-1))[0]
+                    c = self.context_network(torch.cat([z, text_embeddings], dim=-1))[0]
+                else:
+                    c = self.context_network(z)[0]
                 loss_infonce = self._get_infonce_loss(z, c, self.hparams.num_negative_samples)
                 self.log(f'{mode}_loss_infonce', loss_infonce)
                 loss_contrastive = loss_infonce * self.hparams.infonce_loss_weight
