@@ -1201,7 +1201,7 @@ if __name__ == '__main__':
         (255, 0, 0), # Red
         (0, 0, 255), # Blue
         # (0, 255, 255), # Cyan
-        (192, 192, 192), # Silver
+        # (192, 192, 192), # Silver
         # (255, 165, 0), # Orange
     ]
     light_colors = [
@@ -1209,14 +1209,16 @@ if __name__ == '__main__':
         (0, 255, 255), # Cyan
         (192, 192, 192), # Silver
         # (255, 165, 0), # Orange
-        (100, 100, 0), # Dark Olive
+        # (100, 100, 0), # Dark Olive
     ]
     boulder_colors = [
-        (255, 0, 0), # Red
+        # (255, 0, 0), # Red
         # (0, 0, 255), # Blue
-        (0, 255, 255), # Cyan
+        # (0, 255, 255), # Cyan
         # (192, 192, 192), # Silver
-        (255, 165, 0), # Orange
+        # (255, 165, 0), # Orange
+        (0, 255, 0), # Green
+        (255, 255, 255), # White
     ]
 
     make_sprites(car_colors, light_colors, boulder_colors)
@@ -1234,9 +1236,9 @@ if __name__ == '__main__':
     gridworld = Gridworld(grid_x, grid_y, sprite_size=SPRITE_SIZE)
 
 
-    fixed_light_positions = [(0, 0, 'down'), (3, grid_y - 1, 'up'), (grid_x - 3, 0, 'down')]#, (grid_x - 5, grid_y - 4, 'up'), (grid_x // 2, grid_y // 2, 'up')]
+    fixed_light_positions = [(0, 0, 'down'), (3, grid_y - 1, 'up')]#, (grid_x - 3, 0, 'down')]#, (grid_x - 5, grid_y - 4, 'up'), (grid_x // 2, grid_y // 2, 'up')]
 
-    gridworld.randomly_initialize(car_colors, light_colors, boulder_colors, num_cars=3, num_lights=3, num_boulders=3, fixed_light_positions=fixed_light_positions, x_percent=50, y_percent=10, z_percent=30)
+    gridworld.randomly_initialize(car_colors, light_colors, boulder_colors, num_cars=2, num_lights=2, num_boulders=2, fixed_light_positions=fixed_light_positions, x_percent=50, y_percent=10, z_percent=30)
     pre_intervention_step = True
 
     gridworld.step()  # Initial step to set up the environment

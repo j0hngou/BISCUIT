@@ -48,7 +48,7 @@ if __name__ == '__main__':
     parser.add_argument('--num_cpc_steps', type=int, default=1)
     parser.add_argument('--negative_sampling_mode', type=str, default='temporal_distance')
     parser.add_argument('--temporal_bias_strength', type=float, default=1.0)
-    parser.add_argument('--id_ctx_network', type=bool, default=False)
+    parser.add_argument('--id_ctx_network', action='store_true', default=False)
     parser.add_argument('--text_mlp_out_dim', type=int, default=40)
     parser.add_argument('--use_text_in_ctx', action='store_true', default=False)
     parser.add_argument('--text_encoder', type=str, default='sentence_transformer')
