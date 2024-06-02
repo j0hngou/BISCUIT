@@ -1155,9 +1155,14 @@ class GridworldDataset(Dataset):
         if self.return_targets and target is not None:
             returns.append(target)
         if self.return_text:
-            returns += [self.input_ids[start_frame_idx:start_frame_idx + self.seq_len - 1].squeeze(), 
-                        self.token_type_ids[start_frame_idx:start_frame_idx + self.seq_len - 1].squeeze(),
-                        self.attention_mask[start_frame_idx:start_frame_idx + self.seq_len - 1].squeeze()]
+            if self.single_image:
+                returns += [self.input_ids[start_frame_idx].squeeze(),
+                            self.token_type_ids[start_frame_idx].squeeze(),
+                            self.attention_mask[start_frame_idx].squeeze()]
+            else:
+                returns += [self.input_ids[start_frame_idx:start_frame_idx + self.seq_len - 1].squeeze(), 
+                            self.token_type_ids[start_frame_idx:start_frame_idx + self.seq_len - 1].squeeze(),
+                            self.attention_mask[start_frame_idx:start_frame_idx + self.seq_len - 1].squeeze()]
         if self.return_latents:
             returns.append(lat)
         

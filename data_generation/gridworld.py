@@ -6,6 +6,7 @@ from collections import defaultdict
 from itertools import cycle
 import webcolors
 import os
+import re
 # from sprite_maker import make_sprites
 
 seed = 2
@@ -1148,6 +1149,145 @@ class Gridworld:
         for entity in self.entities:
             entity_groups[entity.entity_type].append(entity)
         self.entity_groups = entity_groups
+
+
+
+    def initialize_from_causal_dict(self, causal_dict, fixed_car_positions=None, fixed_car_orientations=None):
+        """
+        Initializes the gridworld with entities based on a merged causal dictionary.
+
+        Args:
+            causal_dict (dict): A dictionary containing the causal variables and their values.
+            fixed_car_positions (dict of str: float, optional): Fixed normalized x positions for the cars with entity names as keys.
+            fixed_car_orientations (dict of str: str, optional): Fixed orientations for the cars with entity names as keys.
+        """
+        # Merge the dictionaries
+        if fixed_car_orientations:
+            causal_dict.update(fixed_car_orientations)
+        if fixed_car_positions:
+            causal_dict.update(fixed_car_positions)
+
+        # Keep only traffic lights in the entity map
+        traffic_lights = {pos: entities for pos, entities in self.entity_map.items() if any(isinstance(e, TrafficLight) for e in entities)}
+        self.entity_map = defaultdict(list, traffic_lights)
+        
+        grid_size = self.width  # Assuming width and height are the same
+
+        positions = defaultdict(dict)
+        orientations = {}
+        states = {}
+
+        for key, value in causal_dict.items():
+            match = re.match(r'([a-z]+)_\(([\d\s,]+)\)_(position_[xy]|state|orientation)', key)
+            if not match:
+                continue
+
+            entity_type, color_str, attribute = match.groups()
+            color = tuple(map(int, color_str.split(', ')))
+
+            entity_name = f"{entity_type}_{color}"
+
+            if attribute == 'position_x':
+                positions[entity_name]['x'] = int(round(value * (grid_size - 1)))
+            elif attribute == 'position_y':
+                positions[entity_name]['y'] = int(round(value * (grid_size - 1)))
+            elif attribute == 'orientation':
+                orientations[entity_name] = value
+            elif attribute == 'state':
+                states[entity_name] = 'red' if value < 0.5 else 'green'
+
+        # Now create and add entities
+        for entity_name, pos in positions.items():
+            entity_type, color_str = entity_name.split('_', 1)
+            color = tuple(map(int, color_str[1:-1].split(', ')))
+
+            if entity_type == 'vehicle':
+                x = pos['x']
+                y = pos['y']
+                orientation = orientations.get(entity_name, random.choice(['up', 'down', 'left', 'right']))
+                entity = Vehicle(x, y, color, size=1, orientation=orientation, speed=1)
+            elif entity_type == 'obstacle':
+                x = pos['x']
+                y = pos['y']
+                entity = Obstacle(x, y, color)
+            self.add_new_entity(entity)
+
+        # Set the states for traffic lights
+        for entity_name, state in states.items():
+            entity_type, color_str = entity_name.split('_', 1)
+            color = tuple(map(int, color_str[1:-1].split(', ')))
+            for entities in self.entity_map.values():
+                for entity in entities:
+                    if isinstance(entity, TrafficLight) and entity.color == color:
+                        entity.state = state
+                        entity.update_sprite()
+
+    def add_new_entity(self, entity):
+        if (entity.x, entity.y) not in self.entity_map:
+            self.entity_map[(entity.x, entity.y)] = []
+        self.entity_map[(entity.x, entity.y)].append(entity)
+
+def execute_actions(self, action_codes):
+    """
+    Executes a sequence of actions on the current state of the gridworld.
+
+    Args:
+        action_codes (list of tuples): A list of action codes in the format (entity_x, entity_y, action), where action is an integer based on the action mapping.
+    """
+    ACTION_MAPPING_REVERSE = {
+        1: 'turn_left',
+        2: 'turn_right',
+        3: 'turn_up',
+        4: 'turn_down',
+        5: 'change_state',
+        6: 'move_to_left',
+        7: 'move_to_right',
+        8: 'move_to_up',
+        9: 'move_to_down'
+    }
+
+    for action_code in action_codes:
+        entity_x, entity_y, action = action_code
+        action_str = ACTION_MAPPING_REVERSE[action]
+
+        # Identify the entity at the given position
+        entities = self.entity_map[(entity_x, entity_y)]
+        if not entities:
+            continue
+
+        # Select the first entity (there should be only one entity in most cases)
+        entity = entities[0]
+
+        if action_str.startswith('turn'):
+            # For vehicles, execute the turn action
+            if isinstance(entity, Vehicle):
+                if action_str == 'turn_left':
+                    entity.turn_left()
+                elif action_str == 'turn_right':
+                    entity.turn_right()
+                elif action_str == 'turn_up':
+                    entity.orientation = 'up'
+                elif action_str == 'turn_down':
+                    entity.orientation = 'down'
+
+        elif action_str == 'change_state':
+            # For traffic lights, change the state
+            if isinstance(entity, TrafficLight):
+                entity.intervene_state()
+
+        elif action_str.startswith('move_to'):
+            # Move the entity to a new position based on the direction
+            if action_str == 'move_to_left':
+                new_x, new_y = entity_x - 1, entity_y
+            elif action_str == 'move_to_right':
+                new_x, new_y = entity_x + 1, entity_y
+            elif action_str == 'move_to_up':
+                new_x, new_y = entity_x, entity_y - 1
+            elif action_str == 'move_to_down':
+                new_x, new_y = entity_x, entity_y + 1
+
+            if self.is_position_within_bounds(new_x, new_y) and self.is_cell_free(new_x, new_y):
+                self.move_entity(entity, new_x, new_y)
 
 if __name__ == '__main__':
     # colors = [

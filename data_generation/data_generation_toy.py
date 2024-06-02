@@ -46,7 +46,7 @@ def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, 
         (255, 0, 0), # Red
         (0, 0, 255), # Blue
         # (0, 255, 255), # Cyan
-        # (192, 192, 192), # Silver
+        (192, 192, 192), # Silver
         # (255, 165, 0), # Orange
     ]
     light_colors = [
@@ -54,7 +54,7 @@ def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, 
         (0, 255, 255), # Cyan
         (192, 192, 192), # Silver
         # (255, 165, 0), # Orange
-        # (100, 100, 0), # Dark Olive
+        (100, 100, 0), # Dark Olive
     ]
     boulder_colors = [
         # (255, 0, 0), # Red
@@ -77,7 +77,7 @@ def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, 
     gridworld = Gridworld(grid_x, grid_y, sprite_size=sprite_size)
 
     # Initialize the gridworld with vehicles, traffic lights, and boulders
-    gridworld.randomly_initialize(car_colors, light_colors, boulder_colors, num_cars=2, num_lights=2, num_boulders=2, fixed_light_positions=fixed_light_positions, x_percent=50, y_percent=10, z_percent=20, shuffle_cars=False)
+    gridworld.randomly_initialize(car_colors, light_colors, boulder_colors, num_cars=3, num_lights=3, num_boulders=1, fixed_light_positions=fixed_light_positions, x_percent=50, y_percent=10, z_percent=20, shuffle_cars=False)
 
     # Run the simulation
     gridworld.step()  # Initial step to set up the environment
@@ -91,12 +91,22 @@ def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, 
     action_descriptions = []  # List of action descriptions
     interventions = []  # List of interventions
 
+    sample_causal_dict = {'obstacle_(192, 192, 192)_position_x': 0.14285714285714285, 'obstacle_(192, 192, 192)_position_y': 0.42857142857142855, 'trafficlight_(0, 255, 255)_state': 0, 'trafficlight_(100, 100, 0)_state': 1, 'trafficlight_(192, 192, 192)_state': 1, 'vehicle_(0, 0, 255)_position_y': 0.2857142857142857, 'vehicle_(192, 192, 192)_position_y': 0.5714285714285714, 'vehicle_(255, 0, 0)_position_y': 1.0}
+    orientations = {'vehicle_(0, 0, 255)_orientation': 'down',
+                    'vehicle_(192, 192, 192)_orientation': 'up',
+                    'vehicle_(255, 0, 0)_orientation': 'up',}
+    car_pos = {
+        'vehicle_(0, 0, 255)_position_x': 0.42857142857142855,
+        'vehicle_(192, 192, 192)_position_x': 0.7142857142857143,
+        'vehicle_(255, 0, 0)_position_x': 0.0,
+    }
     # Generation loop
     for _ in range(1, 20):  # Start from 1 since we already have the initial state
         if pre_intervention_step:
             gridworld.step()
         pre_step_causals = gridworld.get_causals()
         action, intervention = gridworld.semi_random_intervention()
+        gridworld.initialize_from_causal_dict(sample_causal_dict, fixed_car_positions=car_pos, fixed_car_orientations=orientations)
         if not pre_intervention_step:
             intervention = gridworld.step(intervention, pre_step_causals)
         # Append action and intervention information
@@ -165,7 +175,7 @@ if __name__ == '__main__':
     parser.add_argument('--val_seeds', type=int, default=100, help='Number of seeds for the validation split')
     parser.add_argument('--test_seeds', type=int, default=100, help='Number of seeds for the test split')
     parser.add_argument('--batch_size', type=int, default=50, help='Batch size')
-    parser.add_argument('--dataset_name', type=str, default='gridworld_simplified_2c2b2l_noturn_noshufflecars', help='Name of the dataset')
+    parser.add_argument('--dataset_name', type=str, default='gridworld_simplified_2c2b2l_noturn_noshufflecars_f', help='Name of the dataset')
     parser.add_argument('--pre_intervention_step', default=False, action="store_true", help="""
         If true, the intervention is applied before the step function is called.
         This means that the intervention's effects will be visible in the next frame.
@@ -186,20 +196,20 @@ if __name__ == '__main__':
 
     if args.fixed_light_positions is None:
         # fixed_light_positions = [(0, 0, 'down'), (3, grid_y - 1, 'up'), (grid_x - 3, 0, 'down')]
-        fixed_light_positions = [(0, 0, 'down'), (3, grid_y - 1, 'up')]#, (grid_x - 3, 0, 'down')]
+        fixed_light_positions = [(0, 0, 'down'), (3, grid_y - 1, 'up'), (grid_x - 3, 0, 'down')]
     else:
         fixed_light_positions = args.fixed_light_positions
 
     seeds = range(train_seeds)
 
-    gen_data(seeds, batch_size, 'train', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
+    # gen_data(seeds, batch_size, 'train', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
 
-    seeds = range(train_seeds, train_seeds + val_seeds)
-    print(f'Generating {seeds} seeds for the validation split')
-    gen_data(seeds, batch_size, 'val', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
+    # seeds = range(train_seeds, train_seeds + val_seeds)
+    # print(f'Generating {seeds} seeds for the validation split')
+    # gen_data(seeds, batch_size, 'val', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
 
-    seeds = range(train_seeds + val_seeds, train_seeds + val_seeds + test_seeds)
-    print(f'Generating {seeds} seeds for the test split')
-    gen_data(seeds, batch_size, 'test', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
-    # for i in range(15, 25):
-    #     run_simulation(10002, 'val', dataset_name, grid_x, grid_y, sprite_size, fixed_light_positions, save_metadata_flag=True, pre_intervention_step=args.pre_intervention_step)
+    # seeds = range(train_seeds + val_seeds, train_seeds + val_seeds + test_seeds)
+    # print(f'Generating {seeds} seeds for the test split')
+    # gen_data(seeds, batch_size, 'test', dataset_name=dataset_name, grid_x=grid_x, grid_y=grid_y, sprite_size=sprite_size, fixed_light_positions=fixed_light_positions, pre_intervention_step=pre_intervention_step)
+    for i in range(15, 25):
+        run_simulation(10002, 'check', dataset_name, grid_x, grid_y, sprite_size, fixed_light_positions, save_metadata_flag=True, pre_intervention_step=args.pre_intervention_step)
