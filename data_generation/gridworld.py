@@ -1150,7 +1150,80 @@ class Gridworld:
             entity_groups[entity.entity_type].append(entity)
         self.entity_groups = entity_groups
 
+    def parse_action_string(self, action_string, simplified=False):
+        """
+        Parses an action string and returns the corresponding action code.
+        Args:
+            action_string (str): The action string describing the intervention.
+            simplified (bool): Flag to use simplified action mapping. Defaults to False.
+        Returns:
+            tuple: The action code in the format (entity_x, entity_y, action).
+        """
+        ACTION_MAPPING = {1: 'turn', 2: 'turn', 3: 'turn', 4: 'turn', 5: 'changed the state of', 6: 'move', 7: 'move', 8: 'move', 9: 'move'}
+        SIMPLE_ACTION_MAPPING = {5: 'changed the state of', 6: 'move'}
 
+        action_mapping = SIMPLE_ACTION_MAPPING if simplified else ACTION_MAPPING
+
+        # Adjust regex to capture correct entity types and handle the plural forms
+        color_entity_regex = r"the (\w+) (trafficlight|vehicle|boulder)"
+        action_regex = r"(changed the state of|moved)"
+
+        action_match = re.search(action_regex, action_string)
+        entity_match = re.search(color_entity_regex, action_string)
+
+        print(f"Action String: {action_string}")
+        print(f"Action Match: {action_match}")
+        print(f"Entity Match: {entity_match}")
+
+        if not entity_match or not action_match:
+            if action_string == 'You performed no action.':
+                return (-1, -1, -1)
+            raise ValueError("Invalid action string format")
+
+        color, entity_type = entity_match.groups()
+        action_str = action_match.group(0)
+
+        color_rgb = webcolors.name_to_rgb(color)
+
+        # Correct mapping to internal entity types
+        entity_type_mapping = {
+            'trafficlight': 'lights',
+            'vehicle': 'cars',
+            'boulder': 'boulders'
+        }
+        color_mapping = {
+            'silver': (192, 192, 192),
+            'cyan': (0, 255, 255),
+            'olive': (100, 100, 0),
+        }
+        internal_entity_type = entity_type_mapping[entity_type]
+        color_rgb = color_mapping[color]
+        for entity in self.entities:
+            if entity.entity_type == internal_entity_type and entity.color == color_rgb:
+                entity_x, entity_y = entity.x, entity.y
+                break
+        else:
+            raise ValueError("Entity not found in gridworld")
+
+        for key, value in action_mapping.items():
+            if value == action_str:
+                action_code = key
+                break
+        else:
+            raise ValueError("Invalid action in the action string")
+
+        return (entity_x, entity_y, action_code)
+
+    def parse_action_strings(self, action_strings, simplified=False):
+        """
+        Parses multiple action strings and returns a list of corresponding action codes.
+        Args:
+            action_strings (str): The action strings describing the interventions, separated by newlines.
+            simplified (bool): Flag to use simplified action mapping. Defaults to False.
+        Returns:
+            list: A list of action codes in the format (entity_x, entity_y, action).
+        """
+        return [self.parse_action_string(action_string.strip(), simplified=simplified) for action_string in action_strings.split('\n') if action_string.strip()]
 
     def initialize_from_causal_dict(self, causal_dict, fixed_car_positions=None, fixed_car_orientations=None):
         """
@@ -1194,7 +1267,7 @@ class Gridworld:
             elif attribute == 'orientation':
                 orientations[entity_name] = value
             elif attribute == 'state':
-                states[entity_name] = 'red' if value < 0.5 else 'green'
+                states[entity_name] = 'green' if value < 0.5 else 'red'
 
         # Now create and add entities
         for entity_name, pos in positions.items():
@@ -1227,67 +1300,74 @@ class Gridworld:
             self.entity_map[(entity.x, entity.y)] = []
         self.entity_map[(entity.x, entity.y)].append(entity)
 
-def execute_actions(self, action_codes):
-    """
-    Executes a sequence of actions on the current state of the gridworld.
+    def execute_actions(self, action_codes, pre_intervention_step=True):
+        """
+        Executes a sequence of actions on the current state of the gridworld.
 
-    Args:
-        action_codes (list of tuples): A list of action codes in the format (entity_x, entity_y, action), where action is an integer based on the action mapping.
-    """
-    ACTION_MAPPING_REVERSE = {
-        1: 'turn_left',
-        2: 'turn_right',
-        3: 'turn_up',
-        4: 'turn_down',
-        5: 'change_state',
-        6: 'move_to_left',
-        7: 'move_to_right',
-        8: 'move_to_up',
-        9: 'move_to_down'
-    }
+        Args:
+            action_codes (list of tuples): A list of action codes in the format (entity_x, entity_y, action), where action is an integer based on the action mapping.
+        """
 
-    for action_code in action_codes:
-        entity_x, entity_y, action = action_code
-        action_str = ACTION_MAPPING_REVERSE[action]
+        ACTION_MAPPING_REVERSE = {
+            1: 'turn_left',
+            2: 'turn_right',
+            3: 'turn_up',
+            4: 'turn_down',
+            5: 'change_state',
+            6: 'move_to_left',
+            7: 'move_to_right',
+            8: 'move_to_up',
+            9: 'move_to_down'
+        }
 
-        # Identify the entity at the given position
-        entities = self.entity_map[(entity_x, entity_y)]
-        if not entities:
-            continue
+        for action_code in action_codes:
+            if pre_intervention_step:
+                self.step()
+            if action_code == (-1, -1, -1):
+                continue
+            entity_x, entity_y, action = action_code
+            action_str = ACTION_MAPPING_REVERSE[action]
 
-        # Select the first entity (there should be only one entity in most cases)
-        entity = entities[0]
+            # Identify the entity at the given position
+            entities = self.entity_map[(entity_x, entity_y)]
+            if not entities:
+                raise ValueError(f"No entity found at position ({entity_x}, {entity_y})")
 
-        if action_str.startswith('turn'):
-            # For vehicles, execute the turn action
-            if isinstance(entity, Vehicle):
-                if action_str == 'turn_left':
-                    entity.turn_left()
-                elif action_str == 'turn_right':
-                    entity.turn_right()
-                elif action_str == 'turn_up':
-                    entity.orientation = 'up'
-                elif action_str == 'turn_down':
-                    entity.orientation = 'down'
+            # Select the first entity (there should be only one entity in most cases)
+            entity = entities[0]
 
-        elif action_str == 'change_state':
-            # For traffic lights, change the state
-            if isinstance(entity, TrafficLight):
-                entity.intervene_state()
+            if action_str.startswith('turn'):
+                # For vehicles, execute the turn action
+                if isinstance(entity, Vehicle):
+                    if action_str == 'turn_left':
+                        entity.turn_left()
+                    elif action_str == 'turn_right':
+                        entity.turn_right()
+                    elif action_str == 'turn_up':
+                        entity.orientation = 'up'
+                    elif action_str == 'turn_down':
+                        entity.orientation = 'down'
 
-        elif action_str.startswith('move_to'):
-            # Move the entity to a new position based on the direction
-            if action_str == 'move_to_left':
-                new_x, new_y = entity_x - 1, entity_y
-            elif action_str == 'move_to_right':
-                new_x, new_y = entity_x + 1, entity_y
-            elif action_str == 'move_to_up':
-                new_x, new_y = entity_x, entity_y - 1
-            elif action_str == 'move_to_down':
-                new_x, new_y = entity_x, entity_y + 1
+            elif action_str == 'change_state':
+                # For traffic lights, change the state
+                if isinstance(entity, TrafficLight):
+                    entity.intervene_state()
 
-            if self.is_position_within_bounds(new_x, new_y) and self.is_cell_free(new_x, new_y):
-                self.move_entity(entity, new_x, new_y)
+            elif action_str.startswith('move_to'):
+                # Move the entity to a new position based on the direction
+                if action_str == 'move_to_left':
+                    new_x, new_y = entity_x - 1, entity_y
+                elif action_str == 'move_to_right':
+                    new_x, new_y = entity_x + 1, entity_y
+                elif action_str == 'move_to_up':
+                    new_x, new_y = entity_x, entity_y - 1
+                elif action_str == 'move_to_down':
+                    new_x, new_y = entity_x, entity_y + 1
+
+                if self.is_position_within_bounds(new_x, new_y) and self.is_cell_free(new_x, new_y):
+                    self.move_entity(entity, new_x, new_y)
+            if not pre_intervention_step:
+                self.step()
 
 if __name__ == '__main__':
     # colors = [
