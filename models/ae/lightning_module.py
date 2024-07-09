@@ -10,7 +10,7 @@ from copy import deepcopy
 
 import sys
 sys.path.append('../../')
-from models.shared import CosineWarmupScheduler, Encoder, Decoder, visualize_ae_reconstruction, SimpleEncoder, SimpleDecoder
+from models.shared import CosineWarmupScheduler, Encoder, Decoder, visualize_ae_reconstruction, SimpleEncoder, SimpleDecoder, EncoderNoCoordConv, DecoderNoCoordConv
 import wandb
 
 
@@ -52,14 +52,17 @@ class Autoencoder(pl.LightningModule):
         """
         super().__init__()
         self.save_hyperparameters()
-
+        use_coordconv = kwargs.get('use_coordconv', False)
+        encdecargs = {'use_coordconv': use_coordconv} if use_coordconv else {}
         if self.hparams.img_width == 32:
             EncoderClass = SimpleEncoder
             DecoderClass = SimpleDecoder
+        elif not use_coordconv:
+            EncoderClass = EncoderNoCoordConv
+            DecoderClass = DecoderNoCoordConv
         else:
             EncoderClass = Encoder
             DecoderClass = Decoder
-        use_coordconv = kwargs.get('use_coordconv', False)
         self.encoder = EncoderClass(num_latents=self.hparams.num_latents,
                                     c_hid=self.hparams.c_hid,
                                     c_in=self.hparams.c_in,
@@ -68,14 +71,16 @@ class Autoencoder(pl.LightningModule):
                                     residual=True,
                                     num_blocks=2,
                                     variational=False,
-                                    use_coordconv=use_coordconv)
+                                    **encdecargs)
+                                    # use_coordconv=use_coordconv)
         self.decoder = DecoderClass(num_latents=self.hparams.num_latents + max(0, self.hparams.action_size),
                                     c_hid=self.hparams.c_hid,
                                     c_out=self.hparams.c_in,
                                     width=self.hparams.img_width,
                                     num_blocks=2,
                                     act_fn=nn.SiLU,
-                                    use_coordconv=use_coordconv)
+                                    **encdecargs)
+                                    # use_coordconv=use_coordconv)
         if self.hparams.action_size > 0 and self.hparams.mi_reg_weight > 0:
             self.action_mi_estimator = nn.Sequential(
                 nn.Linear(self.hparams.action_size + self.hparams.num_latents, self.hparams.c_hid),

@@ -5,6 +5,157 @@ import numpy as np
 from .coordconv import CoordConv2d
 
 
+class EncoderNoCoordConv(nn.Module):
+    """ 
+    Convolution encoder network 
+    We use a stack of convolutions with strides in every second convolution to reduce
+    dimensionality. For the datasets in question, the network showed to be sufficient.
+    """
+
+    def __init__(self, c_hid, num_latents,
+                 c_in=3,
+                 width=32,
+                 act_fn=lambda: nn.SiLU(),
+                 use_batch_norm=False,
+                 residual=False,
+                 num_blocks=1,
+                 variational=True):
+        super().__init__()
+        num_layers = int(np.log2(width) - 2)
+        NormLayer = nn.BatchNorm2d if use_batch_norm else lambda d: nn.GroupNorm(num_groups=8, num_channels=d) # LayerNorm2d
+        self.scale_factor = nn.Parameter(torch.zeros(num_latents,))
+        self.variational = variational
+        if not residual:
+            encoding_layers = [
+                nn.Sequential(
+                    nn.Conv2d(c_in if l_idx == 0 else c_hid, 
+                              c_hid,
+                              kernel_size=3,
+                              padding=1,
+                              stride=2,
+                              bias=False),
+                    PositionLayer(c_hid) if l_idx == 0 else nn.Identity(),
+                    NormLayer(c_hid),
+                    act_fn(),
+                    nn.Conv2d(c_hid, c_hid, kernel_size=3, stride=1, padding=1, bias=False),
+                    NormLayer(c_hid),
+                    act_fn()
+                ) for l_idx in range(num_layers)
+            ]
+        else:
+            encoding_layers = [
+                nn.Sequential(
+                    nn.Conv2d(c_in if l_idx == 0 else c_hid, 
+                              c_hid,
+                              kernel_size=3,
+                              padding=1,
+                              stride=2,
+                              bias=False),
+                    PositionLayer(c_hid) if l_idx == 0 else nn.Identity(),
+                    *[ResidualBlock(nn.Sequential(
+                                  NormLayer(c_hid),
+                                  act_fn(),
+                                  nn.Conv2d(c_hid, c_hid, kernel_size=3, stride=1, padding=1),
+                                  NormLayer(c_hid),
+                                  act_fn(),
+                                  nn.Conv2d(c_hid, c_hid, kernel_size=3, stride=1, padding=1)))
+                      for _ in range(num_blocks)]
+                )
+                for l_idx in range(num_layers)
+            ]
+            encoding_layers += [
+                NormLayer(c_hid),
+                act_fn()
+            ]
+        self.net = nn.Sequential(
+            *encoding_layers,
+            nn.Flatten(),
+            nn.Linear(4*4*c_hid, 4*c_hid),
+            nn.LayerNorm(4*c_hid),
+            act_fn(),
+            nn.Linear(4*c_hid, (2*num_latents if self.variational else num_latents)),
+            VAESplit(num_latents) if self.variational else nn.Identity()
+        )
+
+    def forward(self, img):
+        feats = self.net(img)
+        return feats
+
+
+class VAESplit(nn.Module):
+    
+    def __init__(self, num_latents):
+        super().__init__()
+        self.scale_factor = nn.Parameter(torch.zeros(num_latents,))
+        
+    def forward(self, x):
+        mean, log_std = x.chunk(2, dim=-1)
+        sc = F.softplus(self.scale_factor)[None]
+        log_std = torch.tanh(log_std / sc) * sc
+        return mean, log_std
+
+class DecoderNoCoordConv(nn.Module):
+    """
+    Convolutional decoder network
+    We use a ResNet-based decoder network with upsample layers to increase the
+    dimensionality stepwise. We add positional information in the ResNet blocks
+    for improved position-awareness, similar to setups like SlotAttention. 
+    """
+
+    def __init__(self, c_hid, num_latents, 
+                 num_labels=-1,
+                 width=32,
+                 act_fn=lambda: nn.SiLU(),
+                 use_batch_norm=False,
+                 num_blocks=1,
+                 c_out=-1):
+        super().__init__()
+        if num_labels > 1:
+            out_act = nn.Identity()
+        else:
+            num_labels = 3 if c_out <= 0 else c_out
+            out_act = nn.Tanh()
+        NormLayer = nn.BatchNorm2d if use_batch_norm else lambda d: nn.GroupNorm(num_groups=8, num_channels=d) # LayerNorm2d
+        self.width = width
+        self.linear = nn.Sequential(
+            nn.Linear(num_latents, 4*c_hid),
+            nn.LayerNorm(4*c_hid),
+            act_fn(),
+            nn.Linear(4*c_hid, 4*4*c_hid)
+        )
+        num_layers = int(np.log2(width) - 2)
+        self.net = nn.Sequential(
+            *[
+                nn.Sequential(
+                    nn.Upsample(scale_factor=2.0, mode='bilinear', align_corners=True),
+                    *[ResidualBlock(nn.Sequential(
+                            NormLayer(c_hid),
+                            act_fn(),
+                            nn.Conv2d(c_hid, c_hid, kernel_size=3, stride=1, padding=1),
+                            PositionLayer(c_hid),
+                            NormLayer(c_hid),
+                            act_fn(),
+                            nn.Conv2d(c_hid, c_hid, kernel_size=3, stride=1, padding=1)
+                        )) for _ in range(num_blocks)]
+                ) for _ in range(num_layers)
+            ],
+            NormLayer(c_hid),
+            act_fn(),
+            nn.Conv2d(c_hid, c_hid, 1),
+            # PositionLayer(c_hid),
+            NormLayer(c_hid),
+            act_fn(),
+            nn.Conv2d(c_hid, num_labels, 1),
+            out_act
+        )
+        
+    def forward(self, x):
+        x = self.linear(x)
+        x = x.reshape(x.shape[0], -1, 4, 4)
+        x = self.net(x)
+        return x
+
+
 class Encoder(nn.Module):
     """ 
     Convolution encoder network 
@@ -61,21 +212,6 @@ class Encoder(nn.Module):
         feats = self.net(img)
         return feats
 
-
-
-class VAESplit(nn.Module):
-    
-    def __init__(self, num_latents):
-        super().__init__()
-        self.scale_factor = nn.Parameter(torch.zeros(num_latents,))
-        
-    def forward(self, x):
-        mean, log_std = x.chunk(2, dim=-1)
-        sc = F.softplus(self.scale_factor)[None]
-        log_std = torch.tanh(log_std / sc) * sc
-        return mean, log_std
-
-
 class Decoder(nn.Module):
     def __init__(self, c_hid, num_latents, num_labels=-1, width=32, act_fn=lambda: nn.SiLU(),
                  use_batch_norm=False, num_blocks=1, c_out=-1, use_coordconv=False):
@@ -126,7 +262,6 @@ class Decoder(nn.Module):
         x = x.reshape(x.shape[0], -1, 4, 4)
         x = self.net(x)
         return x
-
 
 
 class TemplateOut(nn.Module):

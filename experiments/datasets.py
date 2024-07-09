@@ -626,6 +626,8 @@ class iTHORDataset(data.Dataset):
             self.return_targets = True
         # Loading data
         data = self.load_data_from_folder(data_split_folder)
+        self.data_files_len, self.episode_length = data['actions'].shape[:2]
+        # self.
         # Preparing images
         self.imgs = data.pop('frames')
         # Fake triplets
@@ -856,7 +858,10 @@ class iTHORDataset(data.Dataset):
         if self.return_targets:
             returns += [target]
         if self.return_text:
-            returns += [self.input_ids[idx + 1:idx+self.seq_len], self.token_type_ids[idx + 1:idx+self.seq_len], self.attention_mask[idx + 1:idx+self.seq_len]]
+            if self.single_image:
+                returns += [self.input_ids[idx], self.token_type_ids[idx], self.attention_mask[idx]]
+            else:
+                returns += [self.input_ids[idx + 1:idx+self.seq_len], self.token_type_ids[idx + 1:idx+self.seq_len], self.attention_mask[idx + 1:idx+self.seq_len]]
         if self.return_latents:
             returns += [lat]
 
@@ -868,7 +873,7 @@ from torch.utils.data import Dataset
 import os
 import json
 from glob import glob
-from tqdm import tqdm as tqdm_track
+# from tqdm import tqdm as tqdm_track
 import torch.nn.functional as F
 
 class GridworldDataset(Dataset):
