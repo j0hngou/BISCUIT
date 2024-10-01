@@ -75,7 +75,10 @@ class SigLIP(nn.Module):
             encoded_input = encoded_input.view(-1, encoded_input.size(-1))
 
         with torch.no_grad():
-            sentence_embeddings = self.model(encoded_input)
+            if encoded_input.dim() == 2:
+                sentence_embeddings = self.model(encoded_input)
+            else:
+                sentence_embeddings = self.model(encoded_input.unsqueeze(0))
             # Reshape back to the original shape
             # if len(encoded_input_shape) == 3:
             #     sentence_embeddings = sentence_embeddings.view(encoded_input.size(0), encoded_input.size(1), -1)

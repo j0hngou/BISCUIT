@@ -21,11 +21,159 @@ from hashlib import sha256
 from scipy import signal
 
 # The simulator itself runs on 512x512, but the images are downsampled by factor 2 afterward (256x256)
+# RESOLUTION = 512  
+# SIMPLE_SET = True
+# OBJECT_NAMES = [
+#     'Apple',
+#     'Knife',
+#     'Stove',
+#     'Microwave',
+#     'Cabinet',
+#     'Toaster',
+#     'Counter'
+# ] + ([
+#     'Egg',
+#     'Pan',
+#     'Plate',
+#     'Potato'
+# ] if not SIMPLE_SET else [])
+MIN_DIST = 0.22
+GRID_STRIDE = MIN_DIST / 20
+DISTANCE_KNIFE_PLATE = 0.23
+
+# NOT_MOVABLE = [
+#     'Window',
+#     'Stove',
+#     'Sink',
+#     'Shelf',
+#     'LightSwitch'
+# ]
+
+# FIXED_POSITION_DICT = [
+#     {
+#         "objectName": "Toaster",
+#         "rotation": {
+#             "x": 0, "y": 270, "z": 0
+#         },
+#         "position": {
+#             "x": 0.98, "y": 0.98, "z": -1.75
+#         }
+#     }
+# ]
+# MOVABLE_POSITION_DICT = [
+#     # {
+#     #     "objectName": "Knife",
+#     #     "rotation": {
+#     #         "x": 0, "y": 90, "z": 90
+#     #     }
+#     # },
+#     # {
+#     #     "objectName": "Apple",
+#     #     "rotation": {
+#     #         "x": 0, "y": 0, "z": 0
+#     #     }
+#     # },
+#     {
+#         "objectName": "Egg",
+#         "rotation": {
+#             "x": 0, "y": 0, "z": 0
+#         }
+#     },
+#     {
+#         "objectName": "Potato",
+#         "rotation": {
+#             "x": 0, "y": 0, "z": 0
+#         }
+#     },
+#     {
+#         "objectName": "Plate",
+#         "rotation": {
+#             "x": 0, "y": 0, "z": 0
+#         }
+#     }
+# ]
+# COUNTER_POSITIONS = [
+#     {
+#         "objectName": None,
+#         "position": {
+#             "x": 0.75, "y": 0.98, "z": -0.35
+#         }
+#     },
+#     {
+#         "objectName": None,
+#         "position": {
+#             "x": 1.03, "y": 0.98, "z": -0.35
+#         }
+#     },
+#     {
+#         "objectName": None,
+#         "position": {
+#             "x": 0.65, "y": 0.98, "z": -0.55
+#         }
+#     },
+#     {
+#         "objectName": None,
+#         "position": {
+#             "x": 1.00, "y": 0.98, "z": -0.81
+#         }
+#     },
+#     # {
+#     #     "objectName": None,
+#     #     "position": {
+#     #         "x": 1.03, "y": 0.98, "z": -0.55
+#     #     }
+#     # },
+#     {
+#         "objectName": None,
+#         "position": {
+#             "x": 0.68, "y": 0.98, "z": -0.81
+#         }
+#     }
+# ]
+# CATEGORICAL_POSITION_DICT = [
+#     {
+#         "objectName": "Pan",
+#         "rotation": {
+#             "x": 0, "y": 0, "z": 0
+#         },
+#         "position": [
+#             {"x": 0.85, "y": 0.95, "z": -1.20},
+#             # {"x": 1.08, "y": 0.95, "z": -1.10},
+#             # {"x": 0.85, "y": 0.95, "z": -1.50},
+#             # {"x": 1.08, "y": 0.98, "z": -1.50},
+#         ]
+#     }
+# ]
+# ACTIONS = {
+#     'PickupObject': [
+#         'Apple', 'Knife'
+#     ] + (['Egg', 'Plate'] if not SIMPLE_SET else []),
+#     'PutObject': (['Pan'] if not SIMPLE_SET else [])  + 
+#     [
+#         'Microwave', 'CounterTop_f8092513'
+#     ],
+#     'ToggleObject': [
+#         'Toaster', 'Microwave', 'StoveKnob_38c1dbc2', 'StoveKnob_690d0d5d', 'StoveKnob_c8955f66', 'StoveKnob_cf670576'
+#     ],
+#     'SliceObject': ([
+#         # 'Potato', 'Apple'
+#         'Apple',
+#     ] if not SIMPLE_SET else []),
+#     'OpenObject': [
+#         'Microwave', 'Cabinet_47fc321b'
+#     ],
+#     'NoOp': [
+#         'NoObject1', 'NoObject2', 'NoObject3' # 'NoObject3', 'NoObject4'
+#     ]
+# }
+# INTERACT_OBJS = list(set([obj for action_key in ['PickupObject', 'ToggleObject', 'SliceObject', 'OpenObject']
+#                               for obj in ACTIONS[action_key]]))
+# PICKUP = {'position': None}
+
+# The simulator itself runs on 512x512, but the images are downsampled by factor 2 afterward (256x256)
 RESOLUTION = 512  
 SIMPLE_SET = False
 OBJECT_NAMES = [
-    'Apple',
-    'Knife',
     'Stove',
     'Microwave',
     'Cabinet',
@@ -38,8 +186,6 @@ OBJECT_NAMES = [
     'Potato'
 ] if not SIMPLE_SET else [])
 MIN_DIST = 0.22
-GRID_STRIDE = MIN_DIST / 20
-DISTANCE_KNIFE_PLATE = 0.23
 
 NOT_MOVABLE = [
     'Window',
@@ -61,18 +207,6 @@ FIXED_POSITION_DICT = [
     }
 ]
 MOVABLE_POSITION_DICT = [
-    {
-        "objectName": "Knife",
-        "rotation": {
-            "x": 0, "y": 90, "z": 90
-        }
-    },
-    {
-        "objectName": "Apple",
-        "rotation": {
-            "x": 0, "y": 0, "z": 0
-        }
-    },
     {
         "objectName": "Egg",
         "rotation": {
@@ -110,24 +244,6 @@ COUNTER_POSITIONS = [
         "position": {
             "x": 0.65, "y": 0.98, "z": -0.55
         }
-    },
-    {
-        "objectName": None,
-        "position": {
-            "x": 1.00, "y": 0.98, "z": -0.81
-        }
-    },
-    # {
-    #     "objectName": None,
-    #     "position": {
-    #         "x": 1.03, "y": 0.98, "z": -0.55
-    #     }
-    # },
-    {
-        "objectName": None,
-        "position": {
-            "x": 0.68, "y": 0.98, "z": -0.81
-        }
     }
 ]
 CATEGORICAL_POSITION_DICT = [
@@ -137,16 +253,13 @@ CATEGORICAL_POSITION_DICT = [
             "x": 0, "y": 0, "z": 0
         },
         "position": [
-            {"x": 0.85, "y": 0.95, "z": -1.20},
-            # {"x": 1.08, "y": 0.95, "z": -1.10},
-            # {"x": 0.85, "y": 0.95, "z": -1.50},
-            # {"x": 1.08, "y": 0.98, "z": -1.50},
+            {"x": 0.85, "y": 0.95, "z": -1.20}
         ]
     }
 ]
 ACTIONS = {
     'PickupObject': [
-        'Apple', 'Knife'
+
     ] + (['Egg', 'Plate'] if not SIMPLE_SET else []),
     'PutObject': (['Pan'] if not SIMPLE_SET else [])  + 
     [
@@ -156,14 +269,13 @@ ACTIONS = {
         'Toaster', 'Microwave', 'StoveKnob_38c1dbc2', 'StoveKnob_690d0d5d', 'StoveKnob_c8955f66', 'StoveKnob_cf670576'
     ],
     'SliceObject': ([
-        # 'Potato', 'Apple'
-        'Apple',
+        'Potato'
     ] if not SIMPLE_SET else []),
     'OpenObject': [
         'Microwave', 'Cabinet_47fc321b'
     ],
     'NoOp': [
-        'NoObject1', 'NoObject2', 'NoObject3' # 'NoObject3', 'NoObject4'
+        'NoObject1', 'NoObject2', 'NoObject3'
     ]
 }
 INTERACT_OBJS = list(set([obj for action_key in ['PickupObject', 'ToggleObject', 'SliceObject', 'OpenObject']
@@ -194,7 +306,7 @@ def initialize_environment(seed:int=42):
     controller = Controller(width=RESOLUTION, 
                             height=RESOLUTION, 
                             gridSize=0.1, 
-                            # platform=CloudRendering,
+                            platform=CloudRendering,
                             renderInstanceSegmentation=True)
 
     # Move the agent to the starting position
@@ -550,8 +662,8 @@ def plot_possible_positions_on_frame(frame, possible_positions, existing_positio
 
     plt.show()
 
-def perform_action(controller : Controller, action_type : str, object_name : str, event : dict, step_number : int = -1):
-    print((f"[{step_number:3d}] " if step_number >= 0 else "") + f"Performing action {action_type} on {object_name}")
+def perform_action(controller : Controller, action_type : str, object_name : str, event : dict, step_number : int = -1, break_egg_if_on_pan : bool = False):
+    # print((f"[{step_number:3d}] " if step_number >= 0 else "") + f"Performing action {action_type} on {object_name}")
     objectId, obj = get_object_id(event, object_name)
     action_pos = get_action_pos(event, objectId, action_type, obj=obj)
     if action_pos is not None:
@@ -589,6 +701,9 @@ def perform_action(controller : Controller, action_type : str, object_name : str
                 return event, None
             event = controller.step(action='PutObject',
                                     objectId=objectId)
+            if picked_object['name'].startswith('Egg') and objectId.startswith('Pan') and event.metadata['lastActionSuccess'] and break_egg_if_on_pan:
+                event = controller.step(action='BreakObject',
+                                        objectId=get_object_id(event, 'Egg')[0])
             PICKUP['position'] = None
             if object_name.startswith('CounterTop'):
                 event, _ = perform_action(controller, action_type='MoveObject', object_name=picked_object['name'], event=event, step_number=step_number)
@@ -601,71 +716,91 @@ def perform_action(controller : Controller, action_type : str, object_name : str
                 if object_name.startswith(mov_pos['objectName']):
                     orig_pos = mov_pos
                     break
-            total_objects = len(MOVABLE_POSITION_DICT)
-
-            # Move from counter to counter
-            if orig_pos['counter_position'] is not None:
-
-                original_positions = orig_pos['counter_position']['position']['x'], orig_pos['counter_position']['position']['z']
-                # Create list of possible positions around original position
-                counter_min_x, counter_max_x = max(original_positions[0] - 0.2, 0.65), min(original_positions[0] + 0.2, 1.00)
-                counter_min_z, counter_max_z = max(original_positions[1] - 0.2, -0.81), min(original_positions[1] + 0.2, -0.35)
-                possible_positions = generate_possible_positions(counter_min_x, counter_max_x, counter_min_z, counter_max_z, GRID_STRIDE)
-                existing_positions = [pos['counter_position']['position'] 
-                                            for pos in MOVABLE_POSITION_DICT 
-                                            if pos['counter_position'] is not None]
-                existing_positions = np.array([list(pos.values()) for pos in existing_positions])
-                existing_positions = existing_positions[:, [0, 2]]
-                valid_positions = []
-                for pos in possible_positions:
-                    # Check if knife is far enough away from plate
-                    if is_position_valid(pos, existing_positions, MIN_DIST, is_knife, is_plate):
-                        # Predictive analysis for future placement
-                        # We moved an object from the counter to the counter, so we need to check
-                        # at this new state whether we can place a new object and move an existing object
-                        existing_positions_without_current = np.delete(existing_positions, np.where(np.all(existing_positions == original_positions, axis=1)), axis=0)
-                        new_state = np.concatenate([existing_positions_without_current, [pos]])
-                        if check_future_placement(new_state, 0.23):
-                            valid_positions.append(pos)
-
-                # plot_possible_positions_on_frame(event.frame, possible_positions, existing_positions)
-                if len(valid_positions) > 0:
-                    x, z = valid_positions[np.random.randint(0, len(valid_positions))]
+            pos_found = False
+            while not pos_found:
+                pos_found = True
+                if orig_pos['counter_position'] is not None:
+                    x = orig_pos['counter_position']['position']['x'] + np.random.rand() * 0.2
+                    x = np.clip(x, 0.65, 1.00)
+                    z = orig_pos['counter_position']['position']['z'] + np.random.rand() * 0.2
+                    z = np.clip(z, -0.81, -0.35)
                 else:
-                    print('No valid positions found')
-                    raise Exception('No valid positions found')
-            else: # Move from hand to counter
+                    x = np.random.uniform(0.65, 1.00)
+                    z = np.random.uniform(-0.35, -0.81)
+                for mov_pos in MOVABLE_POSITION_DICT:
+                    if not object_name.startswith(mov_pos['objectName']):
+                        if mov_pos['counter_position'] is None:
+                            continue
+                        else:
+                            if abs(x - mov_pos['counter_position']['position']['x']) < MIN_DIST and \
+                                    abs(z - mov_pos['counter_position']['position']['z']) < MIN_DIST:
+                                pos_found = False
+                                break
+            # total_objects = len(MOVABLE_POSITION_DICT)
 
-                # Generate list of possible positions
-                counter_min_x, counter_max_x = 0.65, 1.00
-                counter_min_z, counter_max_z = -0.81, -0.35
-                possible_positions = generate_possible_positions(counter_min_x, counter_max_x, counter_min_z, counter_max_z, GRID_STRIDE)
+            # # Move from counter to counter
+            # if orig_pos['counter_position'] is not None:
 
-                # Get existing positions from MOVABLE_POSITION_DICT
-                existing_positions = [pos['counter_position']['position'] 
-                                            for pos in MOVABLE_POSITION_DICT 
-                                            if pos['counter_position'] is not None]
-                existing_positions = np.array([list(pos.values()) for pos in existing_positions])
-                # Throw away y coordinate
-                existing_positions = existing_positions[:, [0, 2]]
+            #     original_positions = orig_pos['counter_position']['position']['x'], orig_pos['counter_position']['position']['z']
+            #     # Create list of possible positions around original position
+            #     counter_min_x, counter_max_x = max(original_positions[0] - 0.2, 0.65), min(original_positions[0] + 0.2, 1.00)
+            #     counter_min_z, counter_max_z = max(original_positions[1] - 0.2, -0.81), min(original_positions[1] + 0.2, -0.35)
+            #     possible_positions = generate_possible_positions(counter_min_x, counter_max_x, counter_min_z, counter_max_z, GRID_STRIDE)
+            #     existing_positions = [pos['counter_position']['position'] 
+            #                                 for pos in MOVABLE_POSITION_DICT 
+            #                                 if pos['counter_position'] is not None]
+            #     existing_positions = np.array([list(pos.values()) for pos in existing_positions])
+            #     existing_positions = existing_positions[:, [0, 2]]
+            #     valid_positions = []
+            #     for pos in possible_positions:
+            #         # Check if knife is far enough away from plate
+            #         if is_position_valid(pos, existing_positions, MIN_DIST, is_knife, is_plate):
+            #             # Predictive analysis for future placement
+            #             # We moved an object from the counter to the counter, so we need to check
+            #             # at this new state whether we can place a new object and move an existing object
+            #             existing_positions_without_current = np.delete(existing_positions, np.where(np.all(existing_positions == original_positions, axis=1)), axis=0)
+            #             new_state = np.concatenate([existing_positions_without_current, [pos]])
+            #             if check_future_placement(new_state, 0.23):
+            #                 valid_positions.append(pos)
 
-                # Filter valid positions
-                valid_positions = []
-                for pos in possible_positions:
-                    if is_position_valid(pos, existing_positions, MIN_DIST, is_knife, is_plate):
-                        # Predictive analysis for future placement
-                        # We moved an object from the hand to the counter, so we need to check
-                        # at this new state whether we can place a new object and move an existing object
-                        new_state = np.concatenate([existing_positions, [pos]])
-                        if check_future_placement(new_state, 0.2):
-                            valid_positions.append(pos)
+            #     # plot_possible_positions_on_frame(event.frame, possible_positions, existing_positions)
+            #     if len(valid_positions) > 0:
+            #         x, z = valid_positions[np.random.randint(0, len(valid_positions))]
+            #     else:
+            #         print('No valid positions found')
+            #         raise Exception('No valid positions found')
+            # else: # Move from hand to counter
 
-                if len(valid_positions) > 0:
-                    x, z = valid_positions[np.random.randint(0, len(valid_positions))]
-                else:
-                    print('No valid positions found')
-                    raise Exception('No valid positions found')
-                    # return event, None
+            #     # Generate list of possible positions
+            #     counter_min_x, counter_max_x = 0.65, 1.00
+            #     counter_min_z, counter_max_z = -0.81, -0.35
+            #     possible_positions = generate_possible_positions(counter_min_x, counter_max_x, counter_min_z, counter_max_z, GRID_STRIDE)
+
+            #     # Get existing positions from MOVABLE_POSITION_DICT
+            #     existing_positions = [pos['counter_position']['position'] 
+            #                                 for pos in MOVABLE_POSITION_DICT 
+            #                                 if pos['counter_position'] is not None]
+            #     existing_positions = np.array([list(pos.values()) for pos in existing_positions])
+            #     # Throw away y coordinate
+            #     existing_positions = existing_positions[:, [0, 2]]
+
+            #     # Filter valid positions
+            #     valid_positions = []
+            #     for pos in possible_positions:
+            #         if is_position_valid(pos, existing_positions, MIN_DIST, is_knife, is_plate):
+            #             # Predictive analysis for future placement
+            #             # We moved an object from the hand to the counter, so we need to check
+            #             # at this new state whether we can place a new object and move an existing object
+            #             new_state = np.concatenate([existing_positions, [pos]])
+            #             if check_future_placement(new_state, 0.2):
+            #                 valid_positions.append(pos)
+
+            #     if len(valid_positions) > 0:
+            #         x, z = valid_positions[np.random.randint(0, len(valid_positions))]
+            #     else:
+            #         print('No valid positions found')
+            #         raise Exception('No valid positions found')
+            #         # return event, None
 
             for mov_pos in MOVABLE_POSITION_DICT:
                 if object_name.startswith(mov_pos['objectName']):
@@ -971,7 +1106,7 @@ def print_time(time : float):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output_folder', type=str, default='/home/john/PhD/BISCUIT/data/ithor_extended')
+    parser.add_argument('--output_folder', type=str, default='/home/john/PhD/BISCUIT/data/ithor_tests')
     parser.add_argument('--num_frames', type=int, default=100)
     parser.add_argument('--num_sequences', type=int, default=1500)
     parser.add_argument('--prefix', type=str, default='train')    

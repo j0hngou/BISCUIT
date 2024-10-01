@@ -60,7 +60,7 @@ def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, 
         # (255, 0, 0), # Red
         # (0, 0, 255), # Blue
         # (0, 255, 255), # Cyan
-        (192, 192, 192), # Silver
+        # (192, 192, 192), # Silver
         (255, 165, 0), # Orange
     ]
 
@@ -74,7 +74,7 @@ def run_simulation(seed, split, dataset_name='gridworld', grid_x=16, grid_y=16, 
     GridEntity.preload_sprites(colors_dict, orientations, sprite_path='sprites/', sprite_size=sprite_size)
 
     # Create an instance of Gridworld
-    gridworld = Gridworld(grid_x, grid_y, sprite_size=sprite_size)
+    gridworld = Gridworld(grid_x, grid_y, sprite_size=128)
 
     # Initialize the gridworld with vehicles, traffic lights, and boulders
     gridworld.randomly_initialize(car_colors, light_colors, boulder_colors, num_cars=3, num_lights=3, num_boulders=1, fixed_light_positions=fixed_light_positions, x_percent=50, y_percent=10, z_percent=20, shuffle_cars=False)

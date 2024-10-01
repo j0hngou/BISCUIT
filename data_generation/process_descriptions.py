@@ -12,8 +12,8 @@ def translate_action_sequence(action_sequence):
         "OpenObject": "adjusted",
         "ToggleObject": "toggled",
         "PickupObject": "picked up",
-        "PutObject": "carefully placed",
-        "MoveObject": "skillfully moved"
+        "PutObject": "placed",
+        "MoveObject": "moved"
     }
 
     base_object_translations = {
@@ -82,7 +82,7 @@ def process_single_file(file, tokenizer):
     data = dict(np.load(file, allow_pickle=True))
     action_sequence = data['collected_descriptions']
     action_sequence = np.concatenate([np.array(['NoOp NoObject1']), action_sequence])
-    tokenized_sequence = tokenize_action_sequence_clip(translate_action_sequence(action_sequence), tokenizer)
+    tokenized_sequence = tokenize_action_sequence(translate_action_sequence(action_sequence), tokenizer)
     max_len = max([len(seq['input_ids'][0]) for seq in tokenized_sequence])
     
     data['input_ids'] = np.stack([np.concatenate([seq['input_ids'][0], np.zeros(max_len - len(seq['input_ids'][0]), dtype=np.int32)]) for seq in tokenized_sequence], axis=0)
@@ -114,13 +114,13 @@ def process_dataset(path, tokenizer):
                 files.append(os.path.join(root, filename))
                 
     with ThreadPoolExecutor() as executor:
-        list(tqdm.tqdm(executor.map(lambda file: process_single_file_clip(file, tokenizer), files), total=len(files)))
+        list(tqdm.tqdm(executor.map(lambda file: process_single_file(file, tokenizer), files), total=len(files)))
 
 if __name__ == '__main__':
-    # tokenizer = transformers.BertTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
-    tokenizer = get_tokenizer('hf-hub:timm/ViT-B-16-SigLIP')
+    tokenizer = transformers.BertTokenizer.from_pretrained('sentence-transformers/all-MiniLM-L6-v2')
+    # tokenizer = get_tokenizer('hf-hub:timm/ViT-B-16-SigLIP')
 
-    path = '/scratch-shared/gkounto/biscuit/data/ithor'
+    path = '/scratch-shared/gkounto/biscuit/data/ithor_new'
     process_dataset(path=path + '/train', tokenizer=tokenizer)
     process_dataset(path=path + '/val', tokenizer=tokenizer)
     process_dataset(path=path + '/val_indep', tokenizer=tokenizer)

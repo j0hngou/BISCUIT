@@ -327,6 +327,8 @@ class InteractionTransitionPrior(nn.Module):
         if self.text:
             with torch.no_grad():
                 text_embeddings = self.text_encoder(tokenized_description, tokenized=tokenized)
+                if not tokenized:
+                    text_embeddings = text_embeddings.repeat(action.shape[0], 1)
             text_embeddings = self.text_MLP(text_embeddings)
 
             if self.text_only:
@@ -344,8 +346,8 @@ class InteractionTransitionPrior(nn.Module):
             else:
                 # For non-text_only scenario, encode action and then concatenate with text_embeddings
                 encoded_action = self.encoding_layer(action[...,None,:].expand(-1, self.num_latents, -1))
-                if not tokenized:
-                    text_embeddings = text_embeddings.repeat(encoded_action.shape[0], 1)
+                # if not tokenized and text_embeddings.ndim < encoded_action.ndim:
+                #     text_embeddings = text_embeddings.repeat(encoded_action.shape[0], 1)
                 text_embeddings = text_embeddings[...,None,:].expand(-1, self.num_latents, -1)
                 action = torch.cat([encoded_action, text_embeddings], dim=-1)
                 
@@ -355,7 +357,7 @@ class InteractionTransitionPrior(nn.Module):
                         prev_state = prev_state_default
                     action = torch.cat([action, prev_state], dim=-1)
 
-            action = self.action_preprocess(action[...,None,:].expand(-1, self.num_latents, -1)).squeeze(dim=-1)
+            action = self.action_preprocess(action).squeeze(dim=-1)
         else:
             # For scenarios without text, simply process action
             if self.add_prev_state and prev_state is None:

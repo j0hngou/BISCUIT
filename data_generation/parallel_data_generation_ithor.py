@@ -601,7 +601,7 @@ def downscale_images(images : np.ndarray):
     images = images.astype(np.uint8)
     return images
 
-def generate_sequence(seed : int, output_folder : str, num_frames : int = 200, prefix : str = "", save_segmentations : bool = False, randomize_materials : bool = False, randomize_colors : bool = False, randomize_lighting : bool = False):
+def generate_sequence(seed : int, output_folder : str, num_frames : int = 200, prefix : str = "", save_segmentations : bool = False, randomize_materials : bool = False, randomize_colors : bool = False, randomize_lighting : bool = False, save_objects_states : bool = False):
     print('-> Seed:', seed)
     attempts = 0
     success = False
@@ -619,6 +619,7 @@ def generate_sequence(seed : int, output_folder : str, num_frames : int = 200, p
     collected_states = defaultdict(lambda : np.zeros((num_frames,), dtype=np.float32))
     collected_segmentations = dict()
     collected_descriptions = []
+    objects_states = [last_step['event'].metadata['objects']]
     debug_info = defaultdict(lambda : [])
     collected_frames[0] = event.frame
     for key, val in get_environment_state(event).items():
@@ -648,6 +649,9 @@ def generate_sequence(seed : int, output_folder : str, num_frames : int = 200, p
         )
     for i in range(1,num_frames):
         last_step = perform_random_action(controller, last_step)
+        if save_objects_states:
+            objects_state = last_step['event'].metadata['objects']
+            objects_states.append(objects_state)
         collected_frames[i] = last_step['event'].frame
         collected_actions[i] = last_step['action_pos']
         collected_descriptions.append(last_step['description'])
@@ -667,6 +671,7 @@ def generate_sequence(seed : int, output_folder : str, num_frames : int = 200, p
     latents = np.stack([collected_states[key] for key in causal_keys], axis=1)
     latents, causal_keys = simplify_latents(latents, causal_keys)
     targets = create_targets(debug_info, causal_keys)
+    objects_states = np.asarray(objects_states, dtype="object")
     np.savez_compressed(os.path.join(output_folder, f'{prefix}seq_{str(seed).zfill(6)}.npz'), 
                         frames=collected_frames.transpose(0, 3, 1, 2), 
                         actions=collected_actions, 
@@ -674,6 +679,7 @@ def generate_sequence(seed : int, output_folder : str, num_frames : int = 200, p
                         targets=targets,
                         causal_keys=causal_keys,
                         collected_descriptions=collected_descriptions,
+                        objects_states=objects_states,
                         **{'segm_'+k: collected_segmentations[k] for k in collected_segmentations})
     debug_info['causal_keys'] = causal_keys
     debug_info['seed'] = int(seed)
@@ -707,6 +713,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_processes', type=int, default=18)
     parser.add_argument('--offset', type=int, default=0, help='Offset for sequence generation')
     parser.add_argument('--chunk_size', type=int, default=18, help='Number of sequences to generate in this run')
+    parser.add_argument('--save_objects_states', action='store_true', default=False)
 
     args = parser.parse_args()
 
@@ -721,6 +728,7 @@ if __name__ == '__main__':
     randomize_lighting = args.randomize_lighting
     offset = args.offset
     chunk_size = args.chunk_size
+    save_objects_states = args.save_objects_states
     output_folder = os.path.join(output_folder, prefix)
     hash = sha256(prefix.encode())
     offset_seed = np.frombuffer(hash.digest(), dtype='uint32')[0]
@@ -742,7 +750,7 @@ if __name__ == '__main__':
         if os.path.exists(out_file) and not overwrite:
             return
         print(f'Generating sequence {seq_idx} of {num_sequences}...')
-        generate_sequence(seed, output_folder, num_frames, prefix, save_segmentations, randomize_materials, randomize_colors, randomize_lighting)
+        generate_sequence(seed, output_folder, num_frames, prefix, save_segmentations, randomize_materials, randomize_colors, randomize_lighting, save_objects_states)
 
     max_processes = args.max_processes
     start_time = time.time()

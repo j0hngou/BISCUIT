@@ -873,7 +873,11 @@ from torch.utils.data import Dataset
 import os
 import json
 from glob import glob
+<<<<<<< Updated upstream
 # from tqdm import tqdm as tqdm_track
+=======
+from tqdm.auto import tqdm
+>>>>>>> Stashed changes
 import torch.nn.functional as F
 
 class GridworldDataset(Dataset):
